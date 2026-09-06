@@ -147,6 +147,13 @@ import requests, time, os, subprocess
 BOT_TOKEN = "ISI_TOKEN_BOT_DISINI"
 LAST_UPDATE_ID = 0
 
+try:
+    with open('/etc/vps-domain.txt', 'r') as f:
+        DOMAIN = f.read().strip()
+except:
+    DOMAIN = "IP_VPS"
+
+
 def process_message(text, chat_id):
     if text.startswith("/create"):
         parts = text.split()
@@ -156,7 +163,8 @@ def process_message(text, chat_id):
             hari = parts[3]
             os.system(f'useradd -m -s /bin/false -M {user}')
             os.system(f'echo "{user}:{pwd}" | chpasswd')
-            requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage?chat_id={chat_id}&text=Akun {user} berhasil dibuat selama {hari} hari.")
+            MSG = f"✅ AKUN SSH SUKSES DIBUAT\n━━━━━━━━━━━━━━━━━━\n👤 Username: {user}\n🔑 Password: {pwd}\n🌍 Host: {DOMAIN}\n⏳ Durasi: {hari} Hari\n\n🔌 Port Info:\n• TLS: 443, 8443\n• HTTP: 80, 8080\n• SlowDNS: 53, 5300\n• SSH OHP: 9080\n• UDP Custom: 1-65535\n• UDPGW: 7100-7600\n\n📥 Payload WS:\nGET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\n━━━━━━━━━━━━━━━━━━"
+            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id": chat_id, "text": MSG})
         else:
             requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage?chat_id={chat_id}&text=Format salah. Gunakan: /create user password hari")
 
@@ -200,9 +208,9 @@ NC="\e[0m"
 
 IP=\$(curl -sS ipv4.icanhazip.com)
 if [ -f /etc/vps-domain.txt ]; then
-    DOMAIN=\$(cat /etc/vps-domain.txt)
+    $(cat /etc/vps-domain.txt)=\$(cat /etc/vps-domain.txt)
 else
-    DOMAIN=\$IP
+    $(cat /etc/vps-domain.txt)=\$IP
 fi
 
 clear
@@ -211,7 +219,7 @@ echo -e "\${Y}     PANEL PREMDIGITAL - VPS MANAGER  \${NC}"
 echo -e "\${C}======================================\${NC}"
 echo -e " OS      : \$(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '\"')"
 echo -e " RAM     : \$(free -m | awk 'NR==2{printf "%sMB / %sMB", \$3,\$2}')"
-echo -e " Domain  : \$DOMAIN"
+echo -e " Domain  : \$$(cat /etc/vps-domain.txt)"
 echo -e " IP VPS  : \$IP"
 echo -e "\${C}======================================\${NC}"
 echo -e " [1] Buat Akun SSH Baru"
@@ -237,7 +245,7 @@ case \$opt in
         echo -e "Username : \$user"
         echo -e "Password : \$pass"
         echo -e "Expired  : \$exp"
-        echo -e "Host     : \$DOMAIN"
+        echo -e "Host     : \$$(cat /etc/vps-domain.txt)"
         read -n 1 -s -r -p "Tekan enter untuk kembali ke menu..."
         menu
         ;;
@@ -265,8 +273,8 @@ case \$opt in
         ;;
     4)
         clear
-        echo -e "\${C}=== GANTI DOMAIN SERVER ===\${NC}"
-        echo -e "Domain Saat Ini: \${Y}\$DOMAIN\${NC}"
+        echo -e "\${C}=== GANTI $(cat /etc/vps-domain.txt) SERVER ===\${NC}"
+        echo -e "Domain Saat Ini: \${Y}\$$(cat /etc/vps-domain.txt)\${NC}"
         read -p "Masukkan Domain Baru: " newdomain
         echo "\$newdomain" > /etc/vps-domain.txt
         echo -e "Domain berhasil diubah menjadi: \${Y}\$newdomain\${NC}"
