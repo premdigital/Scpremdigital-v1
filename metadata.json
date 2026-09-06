@@ -1,0 +1,6 @@
+{
+  "name": "TypeScript Tunneling Service",
+  "description": "A structured, scalable tunneling service written in TypeScript.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
