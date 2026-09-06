@@ -111,11 +111,30 @@ def create_ssh():
     os.system(f'useradd -e {exp_date} -s /bin/false -M {username}')
     os.system(f'echo "{username}:{password}" | chpasswd')
     
+    # Baca Domain
+    try:
+        with open('/etc/vps-domain.txt', 'r') as f:
+            domain = f.read().strip()
+    except:
+        domain = "IP_VPS"
+        
     return jsonify({
         "status": "success",
-        "username": username,
-        "password": password,
-        "expired": exp_date
+        "data": {
+            "username": username,
+            "password": password,
+            "host": domain,
+            "durasi": f"{expired_days} Hari",
+            "port_info": {
+                "tls": "443, 8443",
+                "http": "80, 8080",
+                "slowdns": "53, 5300",
+                "ssh_ohp": "9080",
+                "udp_custom": "1-65535",
+                "udpgw": "7100-7600"
+            },
+            "payload_ws": "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
+        }
     })
 
 if __name__ == '__main__':
@@ -241,11 +260,24 @@ case \$opt in
         exp=\$(date -d "+\$masaaktif days" +"%Y-%m-%d")
         useradd -e \$exp -s /bin/false -M \$user
         echo -e "\$user:\$pass" | chpasswd
-        echo -e "\n\${Y}Akun Berhasil Dibuat!\${NC}"
-        echo -e "Username : \$user"
-        echo -e "Password : \$pass"
-        echo -e "Expired  : \$exp"
-        echo -e "Host     : \$$(cat /etc/vps-domain.txt)"
+        echo -e "\n${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
+        echo -e "━━━━━━━━━━━━━━━━━━"
+        echo -e "👤 Username: $user"
+        echo -e "🔑 Password: $pass"
+        echo -e "🌍 Host: $DOMAIN"
+        echo -e "⏳ Durasi: $masaaktif Hari"
+        echo -e ""
+        echo -e "🔌 Port Info:"
+        echo -e "• TLS: 443, 8443"
+        echo -e "• HTTP: 80, 8080"
+        echo -e "• SlowDNS: 53, 5300"
+        echo -e "• SSH OHP: 9080"
+        echo -e "• UDP Custom: 1-65535"
+        echo -e "• UDPGW: 7100-7600"
+        echo -e ""
+        echo -e "📥 Payload WS:"
+        echo -e "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
+        echo -e "━━━━━━━━━━━━━━━━━━"
         read -n 1 -s -r -p "Tekan enter untuk kembali ke menu..."
         menu
         ;;
