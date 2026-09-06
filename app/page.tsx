@@ -6,7 +6,7 @@ import { Server, UserPlus, Lock, Key, Clock, ShieldCheck, CheckCircle2, XCircle,
 export default function Home() {
   const [formData, setFormData] = useState({
     host: '',
-    rootPassword: '',
+    apiKey: '',
     username: '',
     password: '',
     days: '30'
@@ -94,18 +94,18 @@ export default function Home() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1">Password Root VPS</label>
+                    <label className="block text-sm font-medium text-slate-400 mb-1">API Secret (Key)</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Key className="h-4 w-4 text-slate-500" />
                       </div>
                       <input
                         type="password"
-                        name="rootPassword"
+                        name="apiKey"
                         required
-                        value={formData.rootPassword}
+                        value={formData.apiKey}
                         onChange={handleChange}
-                        placeholder="••••••••"
+                        placeholder="PREMDIGITAL_RAHASIA_123"
                         className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-600 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-colors sm:text-sm"
                       />
                     </div>
