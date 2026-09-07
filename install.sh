@@ -89,16 +89,37 @@ sed -i 's/#PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd
 sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
 sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
 echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-[ -d /etc/ssh/sshd_config.d ] && echo "PasswordAuthentication yes" > /etc/ssh/sshd_config.d/01-permitpassword.conf
+sed -i 's|#Banner none|Banner /etc/issue.net|g' /etc/ssh/sshd_config
+sed -i 's|Banner none|Banner /etc/issue.net|g' /etc/ssh/sshd_config
+grep -qxF 'Banner /etc/issue.net' /etc/ssh/sshd_config || echo 'Banner /etc/issue.net' >> /etc/ssh/sshd_config
+[ -d /etc/ssh/sshd_config.d ] && echo -e "PasswordAuthentication yes\nBanner /etc/issue.net" > /etc/ssh/sshd_config.d/01-permitpassword.conf
 systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
 
-# 5. Setting Dropbear (Port 109, 143)
-echo -e "\e[33m[INFO] Setting Dropbear...\e[0m"
+# 5. Setting Banner & Dropbear (Port 109, 143)
+echo -e "\e[33m[INFO] Setting Banner & Dropbear...\e[0m"
 mkdir -p /etc/dropbear
 [ -f /etc/dropbear/dropbear_rsa_host_key ] || dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key -s 2048 2>/dev/null || true
 [ -f /etc/dropbear/dropbear_ecdsa_host_key ] || dropbearkey -t ecdsa -f /etc/dropbear/dropbear_ecdsa_host_key 2>/dev/null || true
 [ -f /etc/dropbear/dropbear_ed25519_host_key ] || dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key 2>/dev/null || true
-touch /etc/issue.net
+
+cat > /etc/issue.net << 'END'
+<br>
+<font color="#00ffcc"><b>========================================</b></font><br>
+<font color="#ffb703"><b>      ★ PREMDIGITAL VIP TUNNELING ★     </b></font><br>
+<font color="#00ffcc"><b>========================================</b></font><br>
+<font color="#ffffff"><b>       [ PERATURAN PENGGUNA SERVER ]    </b></font><br>
+<font color="#ff4d4d"><b>  • DILARANG DDOS / HACKING / SCANNING  </b></font><br>
+<font color="#ff4d4d"><b>  • DILARANG TORRENT / BITTORENT / P2P  </b></font><br>
+<font color="#ff4d4d"><b>  • DILARANG SPAM / CARDING / FRAUD     </b></font><br>
+<font color="#ff4d4d"><b>  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) </b></font><br>
+<font color="#00ffcc"><b>----------------------------------------</b></font><br>
+<font color="#00ff88"><b>  ✓ Server Uptime & High Speed Network  </b></font><br>
+<font color="#00ff88"><b>  ✓ Auto-Reboot Server Tiap 05:00 WIB   </b></font><br>
+<font color="#e0aaff"><b>  ✓ Support & CS: t.me/premdigital      </b></font><br>
+<font color="#00ffcc"><b>========================================</b></font><br>
+<font color="#ffd166"><b>  Terima Kasih Atas Kepercayaan Anda!   </b></font><br>
+<font color="#00ffcc"><b>========================================</b></font><br>
+END
 
 cat > /etc/default/dropbear << 'END'
 NO_START=0
@@ -572,11 +593,12 @@ while true; do
     echo -e " [4] Ganti Domain Server"
     echo -e " [5] Cek Status Port & Service Tunneling"
     echo -e " [6] Restart Semua Service Tunneling"
-    echo -e " [7] Jalankan Auto-Delete Expired"
-    echo -e " [8] Menu Service API & Bot Telegram"
+    echo -e " [7] Pengaturan Banner SSH (/etc/issue.net)"
+    echo -e " [8] Jalankan Auto-Delete Expired"
+    echo -e " [9] Menu Service API & Bot Telegram"
     echo -e " [0] Keluar"
     echo -e "${C}======================================${NC}"
-    read -p " Pilih Opsi [0-8]: " opt
+    read -p " Pilih Opsi [0-9]: " opt
     case $opt in
         1)
             clear
@@ -684,12 +706,68 @@ while true; do
             ;;
         7)
             clear
+            echo -e "${C}======================================${NC}"
+            echo -e "${Y}       PENGATURAN BANNER SSH          ${NC}"
+            echo -e "${C}======================================${NC}"
+            echo -e " [1] Lihat Banner Saat Ini"
+            echo -e " [2] Pasang / Reset Banner PremDigital VIP"
+            echo -e " [3] Edit Banner Manual (via nano)"
+            echo -e " [0] Kembali ke Menu Utama"
+            echo -e "${C}======================================${NC}"
+            read -p " Pilih Opsi [0-3]: " opt_banner
+            case $opt_banner in
+                1)
+                    clear
+                    echo -e "${Y}=== ISI BANNER SAAT INI (/etc/issue.net) ===${NC}"
+                    echo ""
+                    cat /etc/issue.net 2>/dev/null || echo -e "${R}Banner belum ada / kosong.${NC}"
+                    echo ""
+                    echo -e "${C}======================================${NC}"
+                    read -r -p "Tekan [Enter] untuk kembali..." dummy
+                    ;;
+                2)
+                    cat > /etc/issue.net << 'BANNEREOF'
+<br>
+<font color="#00ffcc"><b>========================================</b></font><br>
+<font color="#ffb703"><b>      ★ PREMDIGITAL VIP TUNNELING ★     </b></font><br>
+<font color="#00ffcc"><b>========================================</b></font><br>
+<font color="#ffffff"><b>       [ PERATURAN PENGGUNA SERVER ]    </b></font><br>
+<font color="#ff4d4d"><b>  • DILARANG DDOS / HACKING / SCANNING  </b></font><br>
+<font color="#ff4d4d"><b>  • DILARANG TORRENT / BITTORENT / P2P  </b></font><br>
+<font color="#ff4d4d"><b>  • DILARANG SPAM / CARDING / FRAUD     </b></font><br>
+<font color="#ff4d4d"><b>  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) </b></font><br>
+<font color="#00ffcc"><b>----------------------------------------</b></font><br>
+<font color="#00ff88"><b>  ✓ Server Uptime & High Speed Network  </b></font><br>
+<font color="#00ff88"><b>  ✓ Auto-Reboot Server Tiap 05:00 WIB   </b></font><br>
+<font color="#e0aaff"><b>  ✓ Support & CS: t.me/premdigital      </b></font><br>
+<font color="#00ffcc"><b>========================================</b></font><br>
+<font color="#ffd166"><b>  Terima Kasih Atas Kepercayaan Anda!   </b></font><br>
+<font color="#00ffcc"><b>========================================</b></font><br>
+BANNEREOF
+                    systemctl restart dropbear 2>/dev/null
+                    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+                    echo -e "${G}Banner PremDigital VIP berhasil dipasang & service direstart!${NC}"
+                    sleep 1.5
+                    ;;
+                3)
+                    nano /etc/issue.net
+                    systemctl restart dropbear 2>/dev/null
+                    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+                    echo -e "${G}Banner diperbarui & service direstart!${NC}"
+                    sleep 1.5
+                    ;;
+                *)
+                    ;;
+            esac
+            ;;
+        8)
+            clear
             echo -e "Menjalankan penghapusan akun expired..."
             /usr/local/bin/auto-delete
             echo -e "${G}Penghapusan akun expired selesai!${NC}"
             sleep 1.5
             ;;
-        8)
+        9)
             menu-service
             ;;
         0)
