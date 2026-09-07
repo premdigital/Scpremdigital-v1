@@ -123,24 +123,24 @@ mkdir -p /etc/dropbear
 [ -f /etc/dropbear/dropbear_ed25519_host_key ] || dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key 2>/dev/null || true
 
 cat > /etc/issue.net << 'END'
-<br>
-<font color="#00ffcc"><b>========================================</b></font><br>
-<font color="#ffb703"><b>      ★ PREMDIGITAL VIP TUNNELING ★     </b></font><br>
-<font color="#00ffcc"><b>========================================</b></font><br>
-<font color="#ffffff"><b>       [ PERATURAN PENGGUNA SERVER ]    </b></font><br>
-<font color="#ff4d4d"><b>  • DILARANG DDOS / HACKING / SCANNING  </b></font><br>
-<font color="#ff4d4d"><b>  • DILARANG TORRENT / BITTORENT / P2P  </b></font><br>
-<font color="#ff4d4d"><b>  • DILARANG SPAM / CARDING / FRAUD     </b></font><br>
-<font color="#ff4d4d"><b>  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) </b></font><br>
-<font color="#00ffcc"><b>----------------------------------------</b></font><br>
-<font color="#00ff88"><b>  ✓ Server Uptime & High Speed Network  </b></font><br>
-<font color="#00ff88"><b>  ✓ Auto-Reboot Server Tiap 05:00 WIB   </b></font><br>
-<font color="#e0aaff"><b>  ✓ Support & CS: t.me/premdigital      </b></font><br>
-<font color="#00ffcc"><b>========================================</b></font><br>
-<font color="#ffd166"><b>  Terima Kasih Atas Kepercayaan Anda!   </b></font><br>
-<font color="#00ffcc"><b>========================================</b></font><br>
+========================================
+      ★ PREMDIGITAL VIP TUNNELING ★     
+========================================
+       [ PERATURAN PENGGUNA SERVER ]    
+  • DILARANG DDOS / HACKING / SCANNING  
+  • DILARANG TORRENT / BITTORENT / P2P  
+  • DILARANG SPAM / CARDING / FRAUD     
+  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) 
+----------------------------------------
+  ✓ Server Uptime & High Speed Network  
+  ✓ Auto-Reboot Server Tiap 05:00 WIB   
+  ✓ Support & CS: t.me/premdigital      
+========================================
+  Terima Kasih Atas Kepercayaan Anda!   
+========================================
 END
 cp -f /etc/issue.net /etc/issue 2>/dev/null || true
+cp -f /etc/issue.net /etc/motd 2>/dev/null || true
 
 cat > /etc/default/dropbear << 'END'
 NO_START=0
@@ -748,24 +748,24 @@ while true; do
                     ;;
                 2)
                     cat > /etc/issue.net << 'BANNEREOF'
-<br>
-<font color="#00ffcc"><b>========================================</b></font><br>
-<font color="#ffb703"><b>      ★ PREMDIGITAL VIP TUNNELING ★     </b></font><br>
-<font color="#00ffcc"><b>========================================</b></font><br>
-<font color="#ffffff"><b>       [ PERATURAN PENGGUNA SERVER ]    </b></font><br>
-<font color="#ff4d4d"><b>  • DILARANG DDOS / HACKING / SCANNING  </b></font><br>
-<font color="#ff4d4d"><b>  • DILARANG TORRENT / BITTORENT / P2P  </b></font><br>
-<font color="#ff4d4d"><b>  • DILARANG SPAM / CARDING / FRAUD     </b></font><br>
-<font color="#ff4d4d"><b>  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) </b></font><br>
-<font color="#00ffcc"><b>----------------------------------------</b></font><br>
-<font color="#00ff88"><b>  ✓ Server Uptime & High Speed Network  </b></font><br>
-<font color="#00ff88"><b>  ✓ Auto-Reboot Server Tiap 05:00 WIB   </b></font><br>
-<font color="#e0aaff"><b>  ✓ Support & CS: t.me/premdigital      </b></font><br>
-<font color="#00ffcc"><b>========================================</b></font><br>
-<font color="#ffd166"><b>  Terima Kasih Atas Kepercayaan Anda!   </b></font><br>
-<font color="#00ffcc"><b>========================================</b></font><br>
+========================================
+      ★ PREMDIGITAL VIP TUNNELING ★     
+========================================
+       [ PERATURAN PENGGUNA SERVER ]    
+  • DILARANG DDOS / HACKING / SCANNING  
+  • DILARANG TORRENT / BITTORENT / P2P  
+  • DILARANG SPAM / CARDING / FRAUD     
+  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) 
+----------------------------------------
+  ✓ Server Uptime & High Speed Network  
+  ✓ Auto-Reboot Server Tiap 05:00 WIB   
+  ✓ Support & CS: t.me/premdigital      
+========================================
+  Terima Kasih Atas Kepercayaan Anda!   
+========================================
 BANNEREOF
                     cp -f /etc/issue.net /etc/issue 2>/dev/null || true
+                    cp -f /etc/issue.net /etc/motd 2>/dev/null || true
                     systemctl restart dropbear 2>/dev/null
                     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
                     echo -e "${G}Banner PremDigital VIP berhasil dipasang & service direstart!${NC}"
