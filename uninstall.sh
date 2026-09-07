@@ -20,8 +20,8 @@ fi
 echo -e "\e[33m[1/5] Menghentikan service tunneling...\e[0m"
 systemctl stop ws-proxy 2>/dev/null
 systemctl disable ws-proxy 2>/dev/null
-systemctl stop badvpn-udpgw 2>/dev/null
-systemctl disable badvpn-udpgw 2>/dev/null
+systemctl stop badvpn-7300 badvpn-7100 badvpn-udpgw 2>/dev/null
+systemctl disable badvpn-7300 badvpn-7100 badvpn-udpgw 2>/dev/null
 systemctl stop vps-api 2>/dev/null
 systemctl disable vps-api 2>/dev/null
 systemctl stop vps-bot 2>/dev/null
@@ -29,6 +29,8 @@ systemctl disable vps-bot 2>/dev/null
 
 echo -e "\e[33m[2/5] Menghapus file systemd service...\e[0m"
 rm -f /etc/systemd/system/ws-proxy.service
+rm -f /etc/systemd/system/badvpn-7300.service
+rm -f /etc/systemd/system/badvpn-7100.service
 rm -f /etc/systemd/system/badvpn-udpgw.service
 rm -f /etc/systemd/system/vps-api.service
 rm -f /etc/systemd/system/vps-bot.service

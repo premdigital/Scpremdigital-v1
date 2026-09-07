@@ -50,6 +50,21 @@ iptables -P INPUT ACCEPT 2>/dev/null || true
 iptables -P FORWARD ACCEPT 2>/dev/null || true
 iptables -P OUTPUT ACCEPT 2>/dev/null || true
 
+# Optimasi Kernel TCP BBR & Buffer Anti Speedtest Jump
+echo -e "\e[33m[INFO] Setting Optimasi Kernel TCP BBR & Buffer...\e[0m"
+modprobe tcp_bbr 2>/dev/null || true
+cat >> /etc/sysctl.conf << 'EOF_SYSCTL'
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+net.ipv4.ip_forward=1
+net.core.rmem_max=67108864
+net.core.wmem_max=67108864
+net.ipv4.tcp_rmem=4096 87380 33554432
+net.ipv4.tcp_wmem=4096 65536 33554432
+net.ipv4.tcp_mtu_probing=1
+EOF_SYSCTL
+sysctl -p 2>/dev/null || true
+
 # 2. Setting Waktu & Timezone (WIB)
 echo -e "\e[33m[INFO] Setting Timezone (WIB)...\e[0m"
 ln -fs /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
@@ -177,10 +192,22 @@ cat > /usr/local/bin/ws-proxy << 'END'
 #!/usr/bin/python3
 import socket, threading, select, sys, time
 
+BUFFER_SIZE = 65536
+RESPONSE_101 = b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n"
+
+def set_optimized_sock(s):
+    try:
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 262144)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 262144)
+    except Exception:
+        pass
+
 def handle_client(client_sock, target_host, target_port, tls_target_port=None):
     target_sock = None
     try:
-        client_sock.settimeout(10.0)
+        set_optimized_sock(client_sock)
+        client_sock.settimeout(12.0)
         data = client_sock.recv(4096)
         if not data:
             return
@@ -188,38 +215,63 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
         # 1. Deteksi TLS ClientHello (Byte pertama 0x16 = TLS Handshake)
         if (data[0] == 0x16 or data.startswith(b'\x16')) and tls_target_port:
             target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            set_optimized_sock(target_sock)
             target_sock.connect(('127.0.0.1', tls_target_port))
             target_sock.sendall(data)
-        # 2. Deteksi Request HTTP / WebSocket Upgrade (HTTP Custom Payload tanpa TLS)
-        elif b'HTTP/' in data or b'Upgrade: websocket' in data or b'GET ' in data or b'POST ' in data or b'CONNECT ' in data:
+            first_client_packet = False
+        # 2. Deteksi Request HTTP / WebSocket Upgrade (HTTP Custom Payload)
+        elif b'HTTP/' in data or b'Upgrade: websocket' in data or b'GET ' in data or b'POST ' in data or b'PATCH ' in data or b'HEAD ' in data:
             target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            set_optimized_sock(target_sock)
             target_sock.connect((target_host, target_port))
-            response = (
-                b"HTTP/1.1 101 Switching Protocols\r\n"
-                b"Upgrade: websocket\r\n"
-                b"Connection: Upgrade\r\n\r\n"
-            )
-            client_sock.sendall(response)
+            
+            # Ambil banner awal Dropbear langsung dari port SSH
+            target_sock.settimeout(6.0)
+            ssh_banner = target_sock.recv(1024)
+            if not ssh_banner:
+                return
+            
+            # Kirim respons 101 disusul banner SSH Dropbear ke HTTP Custom
+            client_sock.sendall(RESPONSE_101)
+            client_sock.sendall(ssh_banner)
+            first_client_packet = True
         # 3. Direct SSH Protocol biasa (SSH-2.0...)
         else:
             target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            set_optimized_sock(target_sock)
             target_sock.connect((target_host, target_port))
             target_sock.sendall(data)
+            first_client_packet = False
 
         client_sock.settimeout(None)
         target_sock.settimeout(None)
 
         sockets = [client_sock, target_sock]
         while True:
-            r, _, x = select.select(sockets, [], sockets, 120)
+            r, _, x = select.select(sockets, [], sockets, 300)
             if x or not r:
                 break
             for s in r:
-                other = target_sock if s is client_sock else client_sock
-                buf = s.recv(8192)
-                if not buf:
-                    return
-                other.sendall(buf)
+                if s is client_sock:
+                    buf = client_sock.recv(BUFFER_SIZE)
+                    if not buf:
+                        return
+                    # Filter dan bersihkan paket sisa injeksi [split]HTTP/ 200
+                    if first_client_packet:
+                        if buf.startswith(b"HTTP/") or b"HTTP/1." in buf:
+                            idx = buf.find(b"SSH-2.0")
+                            if idx != -1:
+                                buf = buf[idx:]
+                                target_sock.sendall(buf)
+                                first_client_packet = False
+                            continue
+                        first_client_packet = False
+                    target_sock.sendall(buf)
+                else:
+                    buf = target_sock.recv(BUFFER_SIZE)
+                    if not buf:
+                        return
+                    client_sock.sendall(buf)
     except Exception:
         pass
     finally:
@@ -235,8 +287,9 @@ def start_listener(listen_host, listen_port, target_host, target_port, tls_targe
         try:
             server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            set_optimized_sock(server)
             server.bind((listen_host, listen_port))
-            server.listen(200)
+            server.listen(1000)
             break
         except Exception:
             if server:
@@ -352,12 +405,30 @@ systemctl daemon-reload
 systemctl enable stunnel4 2>/dev/null || true
 systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
 
-# 8. Setting BadVPN UDPGW (Port 7100)
+# 8. Setting BadVPN UDPGW (Port 7100, 7200, 7300)
 echo -e "\e[33m[INFO] Setting BadVPN UDPGW...\e[0m"
-wget -q -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/daybreakersx/premscript/master/badvpn-udpgw64"
+wget -q -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/daybreakersx/premscript/master/badvpn-udpgw64" 2>/dev/null || \
+wget -q -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/SSH-Server/autoscript/main/files/badvpn-udpgw64" 2>/dev/null
 chmod +x /usr/bin/badvpn-udpgw
 
-cat > /etc/systemd/system/badvpn-udpgw.service << 'END'
+# Service port 7300 (Default HTTP Custom)
+cat > /etc/systemd/system/badvpn-7300.service << 'END'
+[Unit]
+Description=BadVPN UDPGW Service (Port 7300)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 500 --max-connections-for-client 20
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+END
+
+# Service port 7100 (Alternatif)
+cat > /etc/systemd/system/badvpn-7100.service << 'END'
 [Unit]
 Description=BadVPN UDPGW Service (Port 7100)
 After=network.target
@@ -373,8 +444,8 @@ WantedBy=multi-user.target
 END
 
 systemctl daemon-reload
-systemctl enable badvpn-udpgw 2>/dev/null || true
-systemctl restart badvpn-udpgw 2>/dev/null || true
+systemctl enable badvpn-7300 badvpn-7100 2>/dev/null || true
+systemctl restart badvpn-7300 badvpn-7100 2>/dev/null || true
 
 # 9. Setting Squid Proxy (Port 8080)
 echo -e "\e[33m[INFO] Setting Squid...\e[0m"
@@ -439,7 +510,7 @@ def create_ssh():
                 "http": "80, 8880, 2082",
                 "dropbear": "109, 143",
                 "openssh": "22, 2253",
-                "udpgw": "7100",
+                "udpgw": "7300, 7100",
                 "squid": "8080"
             },
             "payload_ws": "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
@@ -650,7 +721,7 @@ while true; do
             echo -e "• WebSocket Direct/CDN : 80, 8880, 2082"
             echo -e "• Dropbear SSH         : 109, 143"
             echo -e "• OpenSSH              : 22, 2253"
-            echo -e "• BadVPN UDPGW         : 7100"
+            echo -e "• BadVPN UDPGW         : 7300, 7100"
             echo -e "• Squid Proxy          : 8080"
             echo -e "━━━━━━━━━━━━━━━━━━"
             echo -e "📥 Payload WS (Bisa tanpa TLS / pakai TLS):"
@@ -923,7 +994,7 @@ echo -e " • WebSocket Direct / CDN HTTP : \e[33m80, 8880, 2082\e[0m"
 echo -e " • WebSocket SSL / TLS (Multi) : \e[33m443, 8443\e[0m (Bisa tanpa TLS / pakai TLS)"
 echo -e " • Dropbear SSH                : \e[33m109, 143\e[0m"
 echo -e " • OpenSSH                     : \e[33m22, 2253\e[0m"
-echo -e " • BadVPN UDPGW (Gaming/Call)  : \e[33m7100\e[0m"
+echo -e " • BadVPN UDPGW (Gaming/Call)  : \e[33m7300, 7100\e[0m"
 echo -e " • Squid Proxy                 : \e[33m8080\e[0m"
 echo -e " • Web API Backend Server      : \e[33m5000\e[0m"
 echo -e "\e[36m----------------------------------------------------\e[0m"
