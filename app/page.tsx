@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Server, UserPlus, Lock, Key, Clock, ShieldCheck, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Server, UserPlus, Lock, Key, Clock, ShieldCheck, CheckCircle2, XCircle, Loader2, Copy, Check } from 'lucide-react';
 
 export default function Home() {
   const [formData, setFormData] = useState({
@@ -13,16 +13,53 @@ export default function Home() {
   });
   
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [createdAccount, setCreatedAccount] = useState<{
+    username: string;
+    password: string;
+    host: string;
+    days: string;
+  } | null>(null);
   const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const getAccountFormatText = () => {
+    if (!createdAccount) return '';
+    return `✅ AKUN SSH SUKSES DIBUAT
+━━━━━━━━━━━━━━━━━━
+👤 Username: ${createdAccount.username}
+🔑 Password: ${createdAccount.password}
+🌍 Host: ${createdAccount.host}
+⏳  Durasi: ${createdAccount.days} Hari
+━━━━━━━━━━━━━━━━━━
+🔌 Port Info:
+• TLS: 443, 8443
+• HTTP: 80, 8080
+• SlowDNS: 53, 5300
+• SSH OHP: 9080
+• UDP Custom: 1-65535
+• UDPGW: 7100-7600
+━━━━━━━━━━━━━━━━━━
+📥 Payload WS:
+GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]
+━━━━━━━━━━━━━━━━━━`;
+  };
+
+  const handleCopy = () => {
+    const text = getAccountFormatText();
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
+    setCreatedAccount(null);
 
     try {
       const response = await fetch('/api/ssh/create', {
@@ -35,6 +72,12 @@ export default function Home() {
       
       if (response.ok) {
         setResult({ success: true, message: data.message });
+        setCreatedAccount({
+          username: formData.username,
+          password: formData.password,
+          host: formData.host,
+          days: formData.days
+        });
         // Reset form for user/pass
         setFormData(prev => ({ ...prev, username: '', password: '' }));
       } else {
@@ -205,7 +248,7 @@ export default function Home() {
             {/* Notification Area */}
             {result && (
               <div className={`mt-6 rounded-lg p-4 border ${result.success ? 'bg-emerald-950/50 border-emerald-900' : 'bg-rose-950/50 border-rose-900'}`}>
-                <div className="flex">
+                <div className="flex items-start">
                   <div className="flex-shrink-0">
                     {result.success ? (
                       <CheckCircle2 className="h-5 w-5 text-emerald-400" />
@@ -213,17 +256,38 @@ export default function Home() {
                       <XCircle className="h-5 w-5 text-rose-400" />
                     )}
                   </div>
-                  <div className="ml-3">
+                  <div className="ml-3 flex-1">
                     <h3 className={`text-sm font-medium ${result.success ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {result.success ? 'Berhasil!' : 'Gagal Error!'}
                     </h3>
                     <div className={`mt-1 text-sm ${result.success ? 'text-emerald-300/80' : 'text-rose-300/80'}`}>
                       <p>{result.message || result.error}</p>
-                      {result.success && formData.host && (
-                        <div className="mt-3 p-3 bg-slate-950/50 rounded border border-emerald-900/50 text-xs font-mono text-emerald-200">
-                          <p>Host/IP : {formData.host}</p>
-                          <p>Port : 80, 109, 443</p>
-                          <p>Payload WS : 80 / TLS: 443</p>
+                      
+                      {result.success && createdAccount && (
+                        <div className="mt-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Format Akun Siap Kirim</span>
+                            <button
+                              type="button"
+                              onClick={handleCopy}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/30 rounded text-xs transition"
+                            >
+                              {copied ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  Tersalin!
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  Salin Format
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <pre className="p-3 bg-slate-950 rounded border border-emerald-900/60 text-xs font-mono text-emerald-200 whitespace-pre-wrap select-all overflow-x-auto leading-relaxed">
+                            {getAccountFormatText()}
+                          </pre>
                         </div>
                       )}
                     </div>

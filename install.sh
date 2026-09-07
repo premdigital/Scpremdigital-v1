@@ -189,7 +189,7 @@ def process_message(text, chat_id):
             hari = parts[3]
             os.system(f'useradd -m -s /bin/false -M {user}')
             os.system(f'echo "{user}:{pwd}" | chpasswd')
-            MSG = f"✅ AKUN SSH SUKSES DIBUAT\n━━━━━━━━━━━━━━━━━━\n👤 Username: {user}\n🔑 Password: {pwd}\n🌍 Host: {DOMAIN}\n⏳ Durasi: {hari} Hari\n\n🔌 Port Info:\n• TLS: 443, 8443\n• HTTP: 80, 8080\n• SlowDNS: 53, 5300\n• SSH OHP: 9080\n• UDP Custom: 1-65535\n• UDPGW: 7100-7600\n\n📥 Payload WS:\nGET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\n━━━━━━━━━━━━━━━━━━"
+            MSG = f"✅ AKUN SSH SUKSES DIBUAT\n━━━━━━━━━━━━━━━━━━\n👤 Username: {user}\n🔑 Password: {pwd}\n🌍 Host: {DOMAIN}\n⏳  Durasi: {hari} Hari\n━━━━━━━━━━━━━━━━━━\n🔌 Port Info:\n• TLS: 443, 8443\n• HTTP: 80, 8080\n• SlowDNS: 53, 5300\n• SSH OHP: 9080\n• UDP Custom: 1-65535\n• UDPGW: 7100-7600\n━━━━━━━━━━━━━━━━━━\n📥 Payload WS:\nGET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\n━━━━━━━━━━━━━━━━━━"
             requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id": chat_id, "text": MSG})
         else:
             requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage?chat_id={chat_id}&text=Format salah. Gunakan: /create user password hari")
@@ -280,14 +280,13 @@ case $opt in
         exp=$(date -d "+$masaaktif days" +"%Y-%m-%d")
         useradd -e $exp -s /bin/false -M $user
         echo -e "$user:$pass" | chpasswd
-        echo -e "
-${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
+        echo -e "\n${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
         echo -e "━━━━━━━━━━━━━━━━━━"
         echo -e "👤 Username: $user"
         echo -e "🔑 Password: $pass"
         echo -e "🌍 Host: $DOMAIN"
-        echo -e "⏳ Durasi: $masaaktif Hari"
-        echo -e ""
+        echo -e "⏳  Durasi: $masaaktif Hari"
+        echo -e "━━━━━━━━━━━━━━━━━━"
         echo -e "🔌 Port Info:"
         echo -e "• TLS: 443, 8443"
         echo -e "• HTTP: 80, 8080"
@@ -295,7 +294,7 @@ ${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
         echo -e "• SSH OHP: 9080"
         echo -e "• UDP Custom: 1-65535"
         echo -e "• UDPGW: 7100-7600"
-        echo -e ""
+        echo -e "━━━━━━━━━━━━━━━━━━"
         echo -e "📥 Payload WS:"
         echo -e "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
         echo -e "━━━━━━━━━━━━━━━━━━"
