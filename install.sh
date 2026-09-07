@@ -233,126 +233,129 @@ R="\e[31m"
 G="\e[32m"
 NC="\e[0m"
 
-# Ambil Info Jaringan (IP, ISP, Kota)
-IP=$(curl -sS ipv4.icanhazip.com 2>/dev/null)
-[ -z "$IP" ] && IP=$(curl -sS ipinfo.io/ip 2>/dev/null)
+while true; do
+    # Ambil Info Jaringan (IP, ISP, Kota)
+    IP=$(curl -sS ipv4.icanhazip.com 2>/dev/null)
+    [ -z "$IP" ] && IP=$(curl -sS ipinfo.io/ip 2>/dev/null)
 
-ISP=$(curl -s http://ip-api.com/line/?fields=isp 2>/dev/null)
-[ -z "$ISP" ] && ISP=$(curl -s ipinfo.io/org 2>/dev/null | cut -d " " -f 2-10)
-[ -z "$ISP" ] && ISP="Unknown ISP"
+    ISP=$(curl -s http://ip-api.com/line/?fields=isp 2>/dev/null)
+    [ -z "$ISP" ] && ISP=$(curl -s ipinfo.io/org 2>/dev/null | cut -d " " -f 2-10)
+    [ -z "$ISP" ] && ISP="Unknown ISP"
 
-CITY=$(curl -s http://ip-api.com/line/?fields=city 2>/dev/null)
-[ -z "$CITY" ] && CITY=$(curl -s ipinfo.io/city 2>/dev/null)
+    CITY=$(curl -s http://ip-api.com/line/?fields=city 2>/dev/null)
+    [ -z "$CITY" ] && CITY=$(curl -s ipinfo.io/city 2>/dev/null)
 
-if [ -f /etc/vps-domain.txt ]; then
-    DOMAIN=$(cat /etc/vps-domain.txt)
-else
-    DOMAIN=$IP
-fi
+    if [ -f /etc/vps-domain.txt ]; then
+        DOMAIN=$(cat /etc/vps-domain.txt)
+    else
+        DOMAIN=$IP
+    fi
 
-clear
-echo -e "${C}======================================${NC}"
-echo -e "${Y}     PANEL PREMDIGITAL - VPS MANAGER  ${NC}"
-echo -e "${C}======================================${NC}"
-echo -e " OS      : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
-echo -e " RAM     : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
-echo -e " ISP     : $ISP"
-echo -e " Kota    : $CITY"
-echo -e " Domain  : $DOMAIN"
-echo -e " IP VPS  : $IP"
-echo -e "${C}======================================${NC}"
-echo -e " [1] Buat Akun SSH Baru"
-echo -e " [2] Hapus Akun SSH"
-echo -e " [3] List Akun SSH Aktif"
-echo -e " [4] Ganti Domain Server"
-echo -e " [5] Jalankan Auto-Delete Expired"
-echo -e " [6] Menu Service API & Bot Telegram"
-echo -e " [0] Keluar"
-echo -e "${C}======================================${NC}"
-read -p " Pilih Opsi [0-6]: " opt
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}     PANEL PREMDIGITAL - VPS MANAGER  ${NC}"
+    echo -e "${C}======================================${NC}"
+    echo -e " OS      : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+    echo -e " RAM     : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
+    echo -e " ISP     : $ISP"
+    echo -e " Kota    : $CITY"
+    echo -e " Domain  : $DOMAIN"
+    echo -e " IP VPS  : $IP"
+    echo -e "${C}======================================${NC}"
+    echo -e " [1] Buat Akun SSH Baru"
+    echo -e " [2] Hapus Akun SSH"
+    echo -e " [3] List Akun SSH Aktif"
+    echo -e " [4] Ganti Domain Server"
+    echo -e " [5] Jalankan Auto-Delete Expired"
+    echo -e " [6] Menu Service API & Bot Telegram"
+    echo -e " [0] Keluar"
+    echo -e "${C}======================================${NC}"
+    read -p " Pilih Opsi [0-6]: " opt
 
-case $opt in
-    1)
-        clear
-        read -p "Username: " user
-        read -p "Password: " pass
-        read -p "Berapa Hari: " masaaktif
-        exp=$(date -d "+$masaaktif days" +"%Y-%m-%d")
-        useradd -e $exp -s /bin/false -M $user
-        echo -e "$user:$pass" | chpasswd
-        echo -e "\n${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
-        echo -e "━━━━━━━━━━━━━━━━━━"
-        echo -e "👤 Username: $user"
-        echo -e "🔑 Password: $pass"
-        echo -e "🌍 Host: $DOMAIN"
-        echo -e "⏳  Durasi: $masaaktif Hari"
-        echo -e "━━━━━━━━━━━━━━━━━━"
-        echo -e "🔌 Port Info:"
-        echo -e "• TLS: 443, 8443"
-        echo -e "• HTTP: 80, 8080"
-        echo -e "• SlowDNS: 53, 5300"
-        echo -e "• SSH OHP: 9080"
-        echo -e "• UDP Custom: 1-65535"
-        echo -e "• UDPGW: 7100-7600"
-        echo -e "━━━━━━━━━━━━━━━━━━"
-        echo -e "📥 Payload WS:"
-        echo -e "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
-        echo -e "━━━━━━━━━━━━━━━━━━"
-        read -n 1 -s -r -p "Tekan enter untuk kembali ke menu..."
-        menu
-        ;;
-    2)
-        clear
-        read -p "Masukkan Username yang mau dihapus: " user
-        userdel -f $user
-        echo -e "${R}Akun $user berhasil dihapus.${NC}"
-        read -n 1 -s -r -p "Tekan enter untuk kembali ke menu..."
-        menu
-        ;;
-    3)
-        clear
-        echo -e "${C}======================================${NC}"
-        echo -e "${Y}         LIST AKUN SSH AKTIF          ${NC}"
-        echo -e "${C}======================================${NC}"
-        awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd | while read line
-        do
-            exp=$(chage -l $line | grep "Account expires" | awk -F": " '{print $2}')
-            echo -e "Username: ${Y}$line${NC} | Exp: ${R}$exp${NC}"
-        done
-        echo -e "${C}======================================${NC}"
-        read -n 1 -s -r -p "Tekan enter untuk kembali ke menu..."
-        menu
-        ;;
-    4)
-        clear
-        echo -e "${C}=== GANTI DOMAIN SERVER ===${NC}"
-        echo -e "Domain Saat Ini: ${Y}$DOMAIN${NC}"
-        read -p "Masukkan Domain Baru: " newdomain
-        echo "$newdomain" > /etc/vps-domain.txt
-        echo -e "Domain berhasil diubah menjadi: ${Y}$newdomain${NC}"
-        read -n 1 -s -r -p "Tekan enter untuk kembali ke menu..."
-        menu
-        ;;
-    5)
-        clear
-        echo -e "Menjalankan penghapusan akun expired..."
-        /usr/local/bin/auto-delete
-        read -n 1 -s -r -p "Tekan enter untuk kembali ke menu..."
-        menu
-        ;;
-    6)
-        menu-service
-        ;;
-    0)
-        clear
-        exit 0
-        ;;
-    *)
-        echo -e "Pilihan salah!"
-        sleep 1
-        menu
-        ;;
-esac
+    case $opt in
+        1)
+            clear
+            read -p "Username: " user
+            read -p "Password: " pass
+            read -p "Berapa Hari: " masaaktif
+            exp=$(date -d "+$masaaktif days" +"%Y-%m-%d")
+            useradd -e $exp -s /bin/false -M $user
+            echo -e "$user:$pass" | chpasswd
+            echo -e "
+${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
+            echo -e "━━━━━━━━━━━━━━━━━━"
+            echo -e "👤 Username: $user"
+            echo -e "🔑 Password: $pass"
+            echo -e "🌍 Host: $DOMAIN"
+            echo -e "⏳  Durasi: $masaaktif Hari"
+            echo -e "━━━━━━━━━━━━━━━━━━"
+            echo -e "🔌 Port Info:"
+            echo -e "• TLS: 443, 8443"
+            echo -e "• HTTP: 80, 8080"
+            echo -e "• SlowDNS: 53, 5300"
+            echo -e "• SSH OHP: 9080"
+            echo -e "• UDP Custom: 1-65535"
+            echo -e "• UDPGW: 7100-7600"
+            echo -e "━━━━━━━━━━━━━━━━━━"
+            echo -e "📥 Payload WS:"
+            echo -e "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
+            echo -e "━━━━━━━━━━━━━━━━━━"
+            echo ""
+            read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+            ;;
+        2)
+            clear
+            read -p "Masukkan Username yang mau dihapus: " user
+            userdel -f $user
+            echo -e "
+${R}Akun $user berhasil dihapus.${NC}"
+            sleep 1.5
+            ;;
+        3)
+            clear
+            echo -e "${C}======================================${NC}"
+            echo -e "${Y}         LIST AKUN SSH AKTIF          ${NC}"
+            echo -e "${C}======================================${NC}"
+            awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd | while read line
+            do
+                exp=$(chage -l $line | grep "Account expires" | awk -F": " '{print $2}')
+                echo -e "Username: ${Y}$line${NC} | Exp: ${R}$exp${NC}"
+            done
+            echo -e "${C}======================================${NC}"
+            echo ""
+            read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+            ;;
+        4)
+            clear
+            echo -e "${C}=== GANTI DOMAIN SERVER ===${NC}"
+            echo -e "Domain Saat Ini: ${Y}$DOMAIN${NC}"
+            read -p "Masukkan Domain Baru: " newdomain
+            echo "$newdomain" > /etc/vps-domain.txt
+            echo -e "
+${Y}Domain berhasil diubah menjadi: $newdomain${NC}"
+            sleep 1.5
+            ;;
+        5)
+            clear
+            echo -e "Menjalankan penghapusan akun expired..."
+            /usr/local/bin/auto-delete
+            echo -e "
+${G}Penghapusan akun expired selesai!${NC}"
+            sleep 1.5
+            ;;
+        6)
+            menu-service
+            ;;
+        0)
+            clear
+            exit 0
+            ;;
+        *)
+            echo -e "Pilihan salah!"
+            sleep 1
+            ;;
+    esac
+done
 END
 chmod +x /usr/bin/menu
 
@@ -362,64 +365,72 @@ cat > /usr/bin/menu-service << 'END'
 Y="\e[33m"
 C="\e[36m"
 R="\e[31m"
+G="\e[32m"
 NC="\e[0m"
 
-clear
-echo -e "${C}======================================${NC}"
-echo -e "${Y}       MENU SERVICE (API & BOT)       ${NC}"
-echo -e "${C}======================================${NC}"
-echo -e " [1] Ganti Secret Key API Web"
-echo -e " [2] Ganti Token Bot Telegram"
-echo -e " [3] Restart Service (API & Bot)"
-echo -e " [4] Cek Status Koneksi API (Test Ping)"
-echo -e " [0] Kembali ke Menu Utama"
-echo -e "${C}======================================${NC}"
-read -p " Pilih Opsi [0-4]: " opt
+while true; do
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}       MENU SERVICE (API & BOT)       ${NC}"
+    echo -e "${C}======================================${NC}"
+    echo -e " [1] Ganti Secret Key API Web"
+    echo -e " [2] Ganti Token Bot Telegram"
+    echo -e " [3] Restart Service (API & Bot)"
+    echo -e " [4] Cek Status Koneksi API (Test Ping)"
+    echo -e " [0] Kembali ke Menu Utama"
+    echo -e "${C}======================================${NC}"
+    read -p " Pilih Opsi [0-4]: " opt
 
-case $opt in
-    1)
-        clear
-        read -p "Masukkan Secret Key Baru: " newkey
-        sed -i "s/API_SECRET = ".*"/API_SECRET = "$newkey"/g" /usr/local/bin/vps-api
-        systemctl restart vps-api
-        echo -e "Secret Key berhasil diganti!"
-        sleep 2; menu-service
-        ;;
-    2)
-        clear
-        read -p "Masukkan Token Bot Telegram: " newtoken
-        sed -i "s/BOT_TOKEN = ".*"/BOT_TOKEN = "$newtoken"/g" /usr/local/bin/vps-bot
-        systemctl restart vps-bot
-        echo -e "Token Bot berhasil diganti!"
-        sleep 2; menu-service
-        ;;
-    3)
-        clear
-        echo -e "Merestart Service..."
-        systemctl restart vps-api
-        systemctl restart vps-bot
-        echo -e "Selesai!"
-        sleep 2; menu-service
-        ;;
-    4)
-        clear
-        echo -e "${Y}Mencoba menembak API di localhost (Port 5000)...${NC}"
-        API_KEY=$(grep "API_SECRET" /usr/local/bin/vps-api | cut -d '"' -f 2)
-        curl -X POST http://127.0.0.1:5000/api/create              -H "Content-Type: application/json"              -d '{"secret": "'"$API_KEY"'", "username": "testapi", "password": "123", "expired": "1"}'
-        echo ""
-        echo -e "
+    case $opt in
+        1)
+            clear
+            read -p "Masukkan Secret Key Baru: " newkey
+            sed -i "s/API_SECRET = ".*"/API_SECRET = "$newkey"/g" /usr/local/bin/vps-api
+            systemctl restart vps-api
+            echo -e "
+${G}Secret Key berhasil diganti!${NC}"
+            sleep 1.5
+            ;;
+        2)
+            clear
+            read -p "Masukkan Token Bot Telegram: " newtoken
+            sed -i "s/BOT_TOKEN = ".*"/BOT_TOKEN = "$newtoken"/g" /usr/local/bin/vps-bot
+            systemctl restart vps-bot
+            echo -e "
+${G}Token Bot berhasil diganti!${NC}"
+            sleep 1.5
+            ;;
+        3)
+            clear
+            echo -e "Merestart Service..."
+            systemctl restart vps-api
+            systemctl restart vps-bot
+            echo -e "
+${G}Service API & Bot berhasil direstart!${NC}"
+            sleep 1.5
+            ;;
+        4)
+            clear
+            echo -e "${Y}Mencoba menembak API di localhost (Port 5000)...${NC}
+"
+            API_KEY=$(grep "API_SECRET" /usr/local/bin/vps-api | cut -d '"' -f 2)
+            curl -X POST http://127.0.0.1:5000/api/create                  -H "Content-Type: application/json"                  -d '{"secret": "'"$API_KEY"'", "username": "testapi", "password": "123", "expired": "1"}'
+            echo ""
+            echo -e "
 Jika muncul JSON success, berarti API BEKERJA NORMAL!"
-        userdel -f testapi 2>/dev/null
-        read -n 1 -s -r -p "Tekan enter untuk kembali..."
-        menu-service
-        ;;
-    0)
-        menu
-        ;;
-    *)
-        menu-service
-        ;;
-esac
+            userdel -f testapi 2>/dev/null
+            echo ""
+            read -r -p "Tekan [Enter] untuk kembali ke menu service..." dummy
+            ;;
+        0)
+            break
+            ;;
+        *)
+            echo -e "Pilihan salah!"
+            sleep 1
+            ;;
+    esac
+done
 END
 chmod +x /usr/bin/menu-service
 
