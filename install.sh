@@ -652,14 +652,22 @@ check_dropbear() {
 }
 
 while true; do
-    IP=$(curl -sS -m 2 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 2 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     
-    ISP=$(curl -s -m 2 http://ip-api.com/line/?fields=isp 2>/dev/null)
+    # Deteksi ISP Akurat (ipinfo.io -> ip-api -> ifconfig.co)
+    ISP=$(curl -s -m 3 "https://ipinfo.io/${IP}/org" 2>/dev/null | sed -e 's/^AS[0-9]* //' | tr -d '"')
+    if [[ -z "$ISP" || "$ISP" =~ "{" || "$ISP" =~ "error" || "$ISP" =~ "Rate limit" ]]; then
+        ISP=$(curl -s -m 3 "http://ip-api.com/line/${IP}?fields=isp" 2>/dev/null)
+    fi
     if [[ -z "$ISP" || "$ISP" =~ "{" || "$ISP" =~ "error" || "$ISP" =~ "429" || "$ISP" =~ "Rate limit" ]]; then
         ISP="PremDigital Cloud"
     fi
 
-    CITY=$(curl -s -m 2 http://ip-api.com/line/?fields=city 2>/dev/null)
+    # Deteksi Kota Akurat
+    CITY=$(curl -s -m 3 "https://ipinfo.io/${IP}/city" 2>/dev/null | tr -d '"')
+    if [[ -z "$CITY" || "$CITY" =~ "{" || "$CITY" =~ "error" || "$CITY" =~ "Rate limit" ]]; then
+        CITY=$(curl -s -m 3 "http://ip-api.com/line/${IP}?fields=city" 2>/dev/null)
+    fi
     if [[ -z "$CITY" || "$CITY" =~ "{" || "$CITY" =~ "error" || "$CITY" =~ "429" || "$CITY" =~ "Rate limit" ]]; then
         CITY="Singapore"
     fi
@@ -672,7 +680,7 @@ while true; do
 
     clear
     echo -e "${C}======================================${NC}"
-    echo -e "${Y}     PANEL PREMDIGITAL - VPS MANAGER  ${NC}"
+    echo -e "${Y}          PREMDIGITAL TUNNEL          ${NC}"
     echo -e "${C}======================================${NC}"
     echo -e " OS      : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
     echo -e " RAM     : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
