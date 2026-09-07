@@ -92,7 +92,27 @@ echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
 sed -i 's|#Banner none|Banner /etc/issue.net|g' /etc/ssh/sshd_config
 sed -i 's|Banner none|Banner /etc/issue.net|g' /etc/ssh/sshd_config
 grep -qxF 'Banner /etc/issue.net' /etc/ssh/sshd_config || echo 'Banner /etc/issue.net' >> /etc/ssh/sshd_config
-[ -d /etc/ssh/sshd_config.d ] && echo -e "PasswordAuthentication yes\nBanner /etc/issue.net" > /etc/ssh/sshd_config.d/01-permitpassword.conf
+sed -i 's/#PrintMotd yes/PrintMotd no/g' /etc/ssh/sshd_config
+sed -i 's/PrintMotd yes/PrintMotd no/g' /etc/ssh/sshd_config
+grep -qxF 'PrintMotd no' /etc/ssh/sshd_config || echo 'PrintMotd no' >> /etc/ssh/sshd_config
+sed -i 's/#PrintLastLog yes/PrintLastLog no/g' /etc/ssh/sshd_config
+sed -i 's/PrintLastLog yes/PrintLastLog no/g' /etc/ssh/sshd_config
+grep -qxF 'PrintLastLog no' /etc/ssh/sshd_config || echo 'PrintLastLog no' >> /etc/ssh/sshd_config
+sed -i 's/#DebianBanner yes/DebianBanner no/g' /etc/ssh/sshd_config
+sed -i 's/DebianBanner yes/DebianBanner no/g' /etc/ssh/sshd_config
+grep -qxF 'DebianBanner no' /etc/ssh/sshd_config || echo 'DebianBanner no' >> /etc/ssh/sshd_config
+[ -d /etc/ssh/sshd_config.d ] && echo -e "PasswordAuthentication yes\nBanner /etc/issue.net\nPrintMotd no\nPrintLastLog no\nDebianBanner no" > /etc/ssh/sshd_config.d/01-permitpassword.conf
+
+# Sembunyikan pesan sistem Ubuntu / MOTD bawaan
+echo "" > /etc/motd 2>/dev/null || true
+echo "" > /var/run/motd.dynamic 2>/dev/null || true
+echo "" > /run/motd.dynamic 2>/dev/null || true
+chmod -x /etc/update-motd.d/* 2>/dev/null || true
+sed -i 's/ENABLED=1/ENABLED=0/g' /etc/default/motd-news 2>/dev/null || true
+sed -i 's/.*pam_motd.so/#&/g' /etc/pam.d/sshd 2>/dev/null || true
+sed -i 's/.*pam_motd.so/#&/g' /etc/pam.d/login 2>/dev/null || true
+sed -i 's/.*pam_motd.so/#&/g' /etc/pam.d/dropbear 2>/dev/null || true
+
 systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
 
 # 5. Setting Banner & Dropbear (Port 109, 143)
@@ -120,6 +140,7 @@ cat > /etc/issue.net << 'END'
 <font color="#ffd166"><b>  Terima Kasih Atas Kepercayaan Anda!   </b></font><br>
 <font color="#00ffcc"><b>========================================</b></font><br>
 END
+cp -f /etc/issue.net /etc/issue 2>/dev/null || true
 
 cat > /etc/default/dropbear << 'END'
 NO_START=0
@@ -744,6 +765,7 @@ while true; do
 <font color="#ffd166"><b>  Terima Kasih Atas Kepercayaan Anda!   </b></font><br>
 <font color="#00ffcc"><b>========================================</b></font><br>
 BANNEREOF
+                    cp -f /etc/issue.net /etc/issue 2>/dev/null || true
                     systemctl restart dropbear 2>/dev/null
                     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
                     echo -e "${G}Banner PremDigital VIP berhasil dipasang & service direstart!${NC}"
@@ -751,6 +773,7 @@ BANNEREOF
                     ;;
                 3)
                     nano /etc/issue.net
+                    cp -f /etc/issue.net /etc/issue 2>/dev/null || true
                     systemctl restart dropbear 2>/dev/null
                     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
                     echo -e "${G}Banner diperbarui & service direstart!${NC}"
