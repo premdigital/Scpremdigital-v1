@@ -23,7 +23,32 @@ sleep 1
 echo -e "\e[33m[INFO] Update & Install Packages (Non-interactive)...\e[0m"
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools
+apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools psmisc lsof
+
+# Matikan web server bawaan VPS & bebaskan port tunneling
+echo -e "\e[33m[INFO] Membersihkan port dan service yang berbenturan...\e[0m"
+systemctl stop apache2 2>/dev/null || true
+systemctl disable apache2 2>/dev/null || true
+systemctl stop nginx 2>/dev/null || true
+systemctl disable nginx 2>/dev/null || true
+killall -9 apache2 2>/dev/null || true
+killall -9 nginx 2>/dev/null || true
+
+fuser -k 443/tcp 2>/dev/null || true
+fuser -k 80/tcp 2>/dev/null || true
+fuser -k 700/tcp 2>/dev/null || true
+fuser -k 109/tcp 2>/dev/null || true
+fuser -k 143/tcp 2>/dev/null || true
+fuser -k 4430/tcp 2>/dev/null || true
+fuser -k 8443/tcp 2>/dev/null || true
+fuser -k 8880/tcp 2>/dev/null || true
+fuser -k 2082/tcp 2>/dev/null || true
+
+# Pastikan firewall tidak memblokir port
+ufw disable 2>/dev/null || true
+iptables -P INPUT ACCEPT 2>/dev/null || true
+iptables -P FORWARD ACCEPT 2>/dev/null || true
+iptables -P OUTPUT ACCEPT 2>/dev/null || true
 
 # 2. Setting Waktu & Timezone (WIB)
 echo -e "\e[33m[INFO] Setting Timezone (WIB)...\e[0m"
@@ -69,16 +94,44 @@ systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
 
 # 5. Setting Dropbear (Port 109, 143)
 echo -e "\e[33m[INFO] Setting Dropbear...\e[0m"
-sed -i 's/NO_START=1/NO_START=0/g' /etc/default/dropbear
-sed -i 's/DROPBEAR_PORT=22/DROPBEAR_PORT=109/g' /etc/default/dropbear
-sed -i 's/DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-p 109 -p 143"/g' /etc/default/dropbear
+mkdir -p /etc/dropbear
+[ -f /etc/dropbear/dropbear_rsa_host_key ] || dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key -s 2048 2>/dev/null || true
+[ -f /etc/dropbear/dropbear_ecdsa_host_key ] || dropbearkey -t ecdsa -f /etc/dropbear/dropbear_ecdsa_host_key 2>/dev/null || true
+[ -f /etc/dropbear/dropbear_ed25519_host_key ] || dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key 2>/dev/null || true
+touch /etc/issue.net
+
+cat > /etc/default/dropbear << 'END'
+NO_START=0
+DROPBEAR_PORT=109
+DROPBEAR_EXTRA_ARGS="-p 143"
+DROPBEAR_BANNER="/etc/issue.net"
+DROPBEAR_RECEIVE_WINDOW=65536
+END
+
+cat > /etc/systemd/system/dropbear.service << 'END'
+[Unit]
+Description=Dropbear SSH Server (Port 109, 143)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/dropbear -F -E -p 109 -p 143 -b /etc/issue.net
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+END
+
+systemctl daemon-reload
+systemctl enable dropbear
 systemctl restart dropbear
 
 # 6. Setting WebSocket SSH Proxy (Smart Multiplexer Port 443, 80, 8880, 2082)
 echo -e "\e[33m[INFO] Setting WebSocket SSH Proxy...\e[0m"
 cat > /usr/local/bin/ws-proxy << 'END'
 #!/usr/bin/python3
-import socket, threading, select, sys
+import socket, threading, select, sys, time
 
 def handle_client(client_sock, target_host, target_port, tls_target_port=None):
     target_sock = None
@@ -89,7 +142,7 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
             return
 
         # 1. Deteksi TLS ClientHello (Byte pertama 0x16 = TLS Handshake)
-        if data[0] == 0x16 and tls_target_port:
+        if (data[0] == 0x16 or data.startswith(b'\x16')) and tls_target_port:
             target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             target_sock.connect(('127.0.0.1', tls_target_port))
             target_sock.sendall(data)
@@ -133,45 +186,50 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
             except: pass
 
 def start_listener(listen_host, listen_port, target_host, target_port, tls_target_port=None):
-    try:
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((listen_host, listen_port))
-        server.listen(200)
-        while True:
-            try:
-                client_sock, _ = server.accept()
-                t = threading.Thread(
-                    target=handle_client,
-                    args=(client_sock, target_host, target_port, tls_target_port),
-                    daemon=True
-                )
-                t.start()
-            except Exception:
-                pass
-    except Exception as e:
-        print(f"Error binding {listen_host}:{listen_port} -> {e}", file=sys.stderr)
+    server = None
+    while True:
+        try:
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind((listen_host, listen_port))
+            server.listen(200)
+            break
+        except Exception:
+            if server:
+                try: server.close()
+                except: pass
+            time.sleep(2)
+
+    while True:
+        try:
+            client_sock, _ = server.accept()
+            t = threading.Thread(
+                target=handle_client,
+                args=(client_sock, target_host, target_port, tls_target_port),
+                daemon=True
+            )
+            t.start()
+        except Exception:
+            time.sleep(0.05)
 
 if __name__ == '__main__':
-    # Port 443: Smart Multiplexer (Konek HTTP WebSocket langsung tanpa TLS, atau auto-forward TLS ke Stunnel)
-    t_443 = threading.Thread(target=start_listener, args=('0.0.0.0', 443, '127.0.0.1', 109, 4430), daemon=True)
-    t_443.start()
+    ports = [
+        ('0.0.0.0', 443, '127.0.0.1', 109, 4430),
+        ('0.0.0.0', 80, '127.0.0.1', 109, None),
+        ('127.0.0.1', 700, '127.0.0.1', 109, None),
+        ('0.0.0.0', 8880, '127.0.0.1', 109, None),
+        ('0.0.0.0', 2082, '127.0.0.1', 109, None),
+    ]
+    for host, port, thost, tport, tls_port in ports:
+        t = threading.Thread(
+            target=start_listener,
+            args=(host, port, thost, tport, tls_port),
+            daemon=True
+        )
+        t.start()
 
-    # Port 80: HTTP WebSocket Direct / CDN
-    t_80 = threading.Thread(target=start_listener, args=('0.0.0.0', 80, '127.0.0.1', 109), daemon=True)
-    t_80.start()
-
-    # Port 700: Backend Decrypted TLS dari Stunnel
-    t_700 = threading.Thread(target=start_listener, args=('127.0.0.1', 700, '127.0.0.1', 109), daemon=True)
-    t_700.start()
-
-    # Port 8880 & 2082: Alternatif HTTP WS
-    t_8880 = threading.Thread(target=start_listener, args=('0.0.0.0', 8880, '127.0.0.1', 109), daemon=True)
-    t_8880.start()
-    t_2082 = threading.Thread(target=start_listener, args=('0.0.0.0', 2082, '127.0.0.1', 109), daemon=True)
-    t_2082.start()
-
-    t_443.join()
+    while True:
+        time.sleep(3600)
 END
 chmod +x /usr/local/bin/ws-proxy
 
@@ -186,6 +244,7 @@ User=root
 ExecStart=/usr/bin/python3 /usr/local/bin/ws-proxy
 Restart=always
 RestartSec=3
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target
@@ -197,7 +256,11 @@ systemctl restart ws-proxy
 
 # 7. Setting Stunnel (Port 4430 Internal & 8443)
 echo -e "\e[33m[INFO] Setting Stunnel...\e[0m"
+STUNNEL_BIN=$(command -v stunnel4 || command -v stunnel || echo "/usr/bin/stunnel4")
+
+mkdir -p /etc/stunnel
 cat > /etc/stunnel/stunnel.conf << 'END'
+pid = /run/stunnel4.pid
 cert = /etc/stunnel/stunnel.pem
 client = no
 socket = a:SO_REUSEADDR=1
@@ -209,7 +272,7 @@ accept = 127.0.0.1:4430
 connect = 127.0.0.1:700
 
 [openssh-tls]
-accept = 8443
+accept = 0.0.0.0:8443
 connect = 127.0.0.1:700
 END
 
@@ -217,9 +280,31 @@ openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
 -subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" \
 -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem
 
-sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4 2>/dev/null || true
-echo "ENABLED=1" >> /etc/default/stunnel4
+chmod 600 /etc/stunnel/stunnel.pem
+chown root:root /etc/stunnel/stunnel.pem
 
+cat > /etc/default/stunnel4 << 'END'
+ENABLED=1
+FILES="/etc/stunnel/*.conf"
+OPTIONS=""
+END
+
+cat > /etc/systemd/system/stunnel4.service << EOF
+[Unit]
+Description=SSL/TLS Stunnel Service
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
 systemctl enable stunnel4 2>/dev/null || true
 systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
 
@@ -409,7 +494,7 @@ NC="\e[0m"
 
 check_port() {
     local port=$1
-    if ss -tuln 2>/dev/null | grep -q ":${port} " || netstat -tuln 2>/dev/null | grep -q ":${port} "; then
+    if ss -tuln 2>/dev/null | grep -qE "[:.]${port}[[:space:]]" || netstat -tuln 2>/dev/null | grep -qE "[:.]${port}[[:space:]]" || lsof -iTCP:${port} -sTCP:LISTEN 2>/dev/null | grep -q LISTEN; then
         echo -e "${G}ONLINE${NC}"
     else
         echo -e "${R}OFFLINE${NC}"
@@ -420,19 +505,49 @@ check_service() {
     local sname=$1
     if systemctl is-active --quiet "$sname" 2>/dev/null; then
         echo -e "${G}RUNNING${NC}"
+    elif pidof "$sname" >/dev/null 2>&1; then
+        echo -e "${G}RUNNING${NC}"
+    else
+        echo -e "${R}STOPPED${NC}"
+    fi
+}
+
+check_wsproxy() {
+    if systemctl is-active --quiet ws-proxy 2>/dev/null || pgrep -f "ws-proxy" >/dev/null 2>&1; then
+        echo -e "${G}RUNNING${NC}"
+    else
+        echo -e "${R}STOPPED${NC}"
+    fi
+}
+
+check_stunnel() {
+    if systemctl is-active --quiet stunnel4 2>/dev/null || systemctl is-active --quiet stunnel 2>/dev/null || pidof stunnel4 >/dev/null 2>&1 || pidof stunnel >/dev/null 2>&1; then
+        echo -e "${G}RUNNING${NC}"
+    else
+        echo -e "${R}STOPPED${NC}"
+    fi
+}
+
+check_dropbear() {
+    if systemctl is-active --quiet dropbear 2>/dev/null || pidof dropbear >/dev/null 2>&1; then
+        echo -e "${G}RUNNING${NC}"
     else
         echo -e "${R}STOPPED${NC}"
     fi
 }
 
 while true; do
-    IP=$(curl -sS ipv4.icanhazip.com 2>/dev/null)
-    [ -z "$IP" ] && IP=$(curl -sS ipinfo.io/ip 2>/dev/null)
-    ISP=$(curl -s http://ip-api.com/line/?fields=isp 2>/dev/null)
-    [ -z "$ISP" ] && ISP=$(curl -s ipinfo.io/org 2>/dev/null | cut -d " " -f 2-10)
-    [ -z "$ISP" ] && ISP="Unknown ISP"
-    CITY=$(curl -s http://ip-api.com/line/?fields=city 2>/dev/null)
-    [ -z "$CITY" ] && CITY=$(curl -s ipinfo.io/city 2>/dev/null)
+    IP=$(curl -sS -m 2 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 2 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    
+    ISP=$(curl -s -m 2 http://ip-api.com/line/?fields=isp 2>/dev/null)
+    if [[ -z "$ISP" || "$ISP" =~ "{" || "$ISP" =~ "error" || "$ISP" =~ "429" || "$ISP" =~ "Rate limit" ]]; then
+        ISP="PremDigital Cloud"
+    fi
+
+    CITY=$(curl -s -m 2 http://ip-api.com/line/?fields=city 2>/dev/null)
+    if [[ -z "$CITY" || "$CITY" =~ "{" || "$CITY" =~ "error" || "$CITY" =~ "429" || "$CITY" =~ "Rate limit" ]]; then
+        CITY="Singapore"
+    fi
     
     if [ -f /etc/vps-domain.txt ]; then
         DOMAIN=$(cat /etc/vps-domain.txt)
@@ -534,9 +649,9 @@ while true; do
             echo -e "${C}======================================${NC}"
             echo -e "${Y}    STATUS SERVICE & PORT TUNNELING   ${NC}"
             echo -e "${C}======================================${NC}"
-            echo -e " • WebSocket Proxy    : $(check_service ws-proxy)"
-            echo -e " • Stunnel SSL        : $(check_service stunnel4)"
-            echo -e " • Dropbear SSH       : $(check_service dropbear)"
+            echo -e " • WebSocket Proxy    : $(check_wsproxy)"
+            echo -e " • Stunnel SSL        : $(check_stunnel)"
+            echo -e " • Dropbear SSH       : $(check_dropbear)"
             echo -e " • OpenSSH Server     : $(check_service ssh)"
             echo -e " • BadVPN UDPGW       : $(check_service badvpn-udpgw)"
             echo -e " • Squid Proxy        : $(check_service squid)"
@@ -556,9 +671,9 @@ while true; do
         6)
             clear
             echo -e "${Y}Merestart semua service tunneling...${NC}"
-            systemctl restart ws-proxy
+            systemctl restart ws-proxy 2>/dev/null
             systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
-            systemctl restart dropbear
+            systemctl restart dropbear 2>/dev/null
             systemctl restart badvpn-udpgw 2>/dev/null
             systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
             systemctl restart squid 2>/dev/null
