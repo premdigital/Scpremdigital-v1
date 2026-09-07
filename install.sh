@@ -123,21 +123,23 @@ mkdir -p /etc/dropbear
 [ -f /etc/dropbear/dropbear_ed25519_host_key ] || dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key 2>/dev/null || true
 
 cat > /etc/issue.net << 'END'
-========================================
-      ★ PREMDIGITAL VIP TUNNELING ★     
-========================================
-       [ PERATURAN PENGGUNA SERVER ]    
-  • DILARANG DDOS / HACKING / SCANNING  
-  • DILARANG TORRENT / BITTORENT / P2P  
-  • DILARANG SPAM / CARDING / FRAUD     
-  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) 
-----------------------------------------
-  ✓ Server Uptime & High Speed Network  
-  ✓ Auto-Reboot Server Tiap 05:00 WIB   
-  ✓ Support & CS: t.me/premdigital      
-========================================
-  Terima Kasih Atas Kepercayaan Anda!   
-========================================
+<br>
+<font color="#00ffff">========================================</font><br>
+<font color="#ffd700"><b>     ★ PREMDIGITAL VIP TUNNELING ★     </b></font><br>
+<font color="#00ffff">========================================</font><br>
+<font color="#ffffff"><b>      [ PERATURAN PENGGUNA SERVER ]    </b></font><br>
+<font color="#ff4d4d">  • DILARANG DDOS / HACKING / SCANNING  </font><br>
+<font color="#ff4d4d">  • DILARANG TORRENT / BITTORENT / P2P  </font><br>
+<font color="#ff4d4d">  • DILARANG SPAM / CARDING / FRAUD     </font><br>
+<font color="#ff4d4d">  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) </font><br>
+<font color="#00ffff">----------------------------------------</font><br>
+<font color="#00ff7f">  ✓ Server Uptime & High Speed Network  </font><br>
+<font color="#00ff7f">  ✓ Auto-Reboot Server Tiap 05:00 WIB   </font><br>
+<font color="#e0aaff">  ✓ Support & CS: t.me/premdigital      </font><br>
+<font color="#00ffff">========================================</font><br>
+<font color="#ffd700">  Terima Kasih Atas Kepercayaan Anda!   </font><br>
+<font color="#00ffff">========================================</font><br>
+<br>
 END
 cp -f /etc/issue.net /etc/issue 2>/dev/null || true
 cp -f /etc/issue.net /etc/motd 2>/dev/null || true
@@ -748,21 +750,23 @@ while true; do
                     ;;
                 2)
                     cat > /etc/issue.net << 'BANNEREOF'
-========================================
-      ★ PREMDIGITAL VIP TUNNELING ★     
-========================================
-       [ PERATURAN PENGGUNA SERVER ]    
-  • DILARANG DDOS / HACKING / SCANNING  
-  • DILARANG TORRENT / BITTORENT / P2P  
-  • DILARANG SPAM / CARDING / FRAUD     
-  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) 
-----------------------------------------
-  ✓ Server Uptime & High Speed Network  
-  ✓ Auto-Reboot Server Tiap 05:00 WIB   
-  ✓ Support & CS: t.me/premdigital      
-========================================
-  Terima Kasih Atas Kepercayaan Anda!   
-========================================
+<br>
+<font color="#00ffff">========================================</font><br>
+<font color="#ffd700"><b>     ★ PREMDIGITAL VIP TUNNELING ★     </b></font><br>
+<font color="#00ffff">========================================</font><br>
+<font color="#ffffff"><b>      [ PERATURAN PENGGUNA SERVER ]    </b></font><br>
+<font color="#ff4d4d">  • DILARANG DDOS / HACKING / SCANNING  </font><br>
+<font color="#ff4d4d">  • DILARANG TORRENT / BITTORENT / P2P  </font><br>
+<font color="#ff4d4d">  • DILARANG SPAM / CARDING / FRAUD     </font><br>
+<font color="#ff4d4d">  • DILARANG MULTI-LOGIN (MAX 1 DEVICE) </font><br>
+<font color="#00ffff">----------------------------------------</font><br>
+<font color="#00ff7f">  ✓ Server Uptime & High Speed Network  </font><br>
+<font color="#00ff7f">  ✓ Auto-Reboot Server Tiap 05:00 WIB   </font><br>
+<font color="#e0aaff">  ✓ Support & CS: t.me/premdigital      </font><br>
+<font color="#00ffff">========================================</font><br>
+<font color="#ffd700">  Terima Kasih Atas Kepercayaan Anda!   </font><br>
+<font color="#00ffff">========================================</font><br>
+<br>
 BANNEREOF
                     cp -f /etc/issue.net /etc/issue 2>/dev/null || true
                     cp -f /etc/issue.net /etc/motd 2>/dev/null || true
