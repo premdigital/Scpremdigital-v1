@@ -140,7 +140,7 @@ mkdir -p /etc/dropbear
 cat > /etc/issue.net << 'END'
 <br>
 <font color="#00ffff">========================================</font><br>
-<font color="#ffd700"><b>     ★ PREMDIGITAL VIP TUNNELING ★     </b></font><br>
+<font color="#ffd700"><b>       ★ PREMDIGITAL TUNNELING ★        </b></font><br>
 <font color="#00ffff">========================================</font><br>
 <font color="#ffffff"><b>      [ PERATURAN PENGGUNA SERVER ]    </b></font><br>
 <font color="#ff4d4d">  • DILARANG DDOS / HACKING / SCANNING  </font><br>
@@ -150,7 +150,8 @@ cat > /etc/issue.net << 'END'
 <font color="#00ffff">----------------------------------------</font><br>
 <font color="#00ff7f">  ✓ Server Uptime & High Speed Network  </font><br>
 <font color="#00ff7f">  ✓ Auto-Reboot Server Tiap 05:00 WIB   </font><br>
-<font color="#e0aaff">  ✓ Support & CS: t.me/premdigital      </font><br>
+<font color="#e0aaff">  ✓ Support & CS: https://wa.me/6283188458876 </font><br>
+<font color="#00ffff">  ✓ Website: https://www.premdigital.web.id </font><br>
 <font color="#00ffff">========================================</font><br>
 <font color="#ffd700">  Terima Kasih Atas Kepercayaan Anda!   </font><br>
 <font color="#00ffff">========================================</font><br>
