@@ -23,7 +23,7 @@ sleep 1
 echo -e "\e[33m[INFO] Update & Install Packages (Non-interactive)...\e[0m"
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools psmisc lsof
+apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools psmisc lsof vnstat bc
 
 # Matikan web server bawaan VPS & bebaskan port tunneling
 echo -e "\e[33m[INFO] Membersihkan port dan service yang berbenturan...\e[0m"
@@ -652,6 +652,60 @@ check_dropbear() {
     fi
 }
 
+get_bandwidth() {
+    local iface
+    iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5}')
+    [ -z "$iface" ] && iface=$(ls /sys/class/net | grep -vE 'lo|docker|tun|tap' | head -n1)
+    
+    local used_str="0 MB"
+    local total_bytes=0
+    if [ -n "$iface" ] && [ -f "/sys/class/net/$iface/statistics/rx_bytes" ]; then
+        local rx tx
+        rx=$(cat "/sys/class/net/$iface/statistics/rx_bytes" 2>/dev/null || echo 0)
+        tx=$(cat "/sys/class/net/$iface/statistics/tx_bytes" 2>/dev/null || echo 0)
+        total_bytes=$((rx + tx))
+        
+        # Konversi byte ke MB / GB
+        if [ "$total_bytes" -gt 1073741824 ]; then
+            used_str="$(awk "BEGIN {printf \"%.2f GB\", $total_bytes/1073741824}")"
+        elif [ "$total_bytes" -gt 1048576 ]; then
+            used_str="$(awk "BEGIN {printf \"%.1f MB\", $total_bytes/1048576}")"
+        else
+            used_str="$(awk "BEGIN {printf \"%.0f KB\", $total_bytes/1024}")"
+        fi
+    fi
+
+    # Cek kuota limit: manual setting atau auto-detect provider
+    local limit_cfg="/etc/premdigital/bandwidth_quota.txt"
+    local quota_type="Unlimited"
+
+    if [ -f "$limit_cfg" ]; then
+        quota_type=$(cat "$limit_cfg" | tr -d '\r\n')
+    else
+        # Auto-detect berdasarkan provider/ISP VPS
+        local isp_check="$1"
+        case "$isp_check" in
+            *DigitalOcean*|*DO*) quota_type="1000 GB (DO Plan)" ;;
+            *Linode*|*Akamai*) quota_type="1000 GB (Linode Plan)" ;;
+            *Vultr*) quota_type="1000 GB (Vultr Plan)" ;;
+            *Hetzner*) quota_type="20 TB (Hetzner Plan)" ;;
+            *OVH*) quota_type="Unlimited (OVH Unmetered)" ;;
+            *Contabo*) quota_type="32 TB (Contabo Plan)" ;;
+            *Oracle*) quota_type="10 TB (Oracle Cloud)" ;;
+            *Amazon*|*AWS*) quota_type="100 GB (AWS Free Tier/Metered)" ;;
+            *Google*|*GCP*) quota_type="Metered (GCP Pay-as-you-go)" ;;
+            *Biznet*|*Telkom*|*IDNIC*|*IDCloudHost*|*CBN*|*Indonet*) quota_type="Unlimited (Unmetered ID)" ;;
+            *) quota_type="Unlimited" ;;
+        esac
+    fi
+
+    if [[ "$quota_type" == *"Unlimited"* ]]; then
+        echo -e "${used_str} / ${G}${quota_type}${NC}"
+    else
+        echo -e "${used_str} / ${Y}${quota_type}${NC}"
+    fi
+}
+
 while true; do
     IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     
@@ -679,30 +733,34 @@ while true; do
         DOMAIN=$IP
     fi
 
+    BW_INFO=$(get_bandwidth "$ISP")
+
     clear
     echo -e "${C}======================================${NC}"
     echo -e "${Y}          PREMDIGITAL TUNNEL          ${NC}"
     echo -e "${C}======================================${NC}"
-    echo -e " OS      : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
-    echo -e " RAM     : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
-    echo -e " ISP     : $ISP"
-    echo -e " Kota    : $CITY"
-    echo -e " Domain  : ${Y}$DOMAIN${NC}"
-    echo -e " IP VPS  : ${G}$IP${NC}"
+    echo -e " OS         : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+    echo -e " RAM        : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
+    echo -e " Bandwidth  : $BW_INFO"
+    echo -e " ISP        : $ISP"
+    echo -e " Kota       : $CITY"
+    echo -e " Domain     : ${Y}$DOMAIN${NC}"
+    echo -e " IP VPS     : ${G}$IP${NC}"
     echo -e "${C}======================================${NC}"
     echo -e " [1] Buat Akun SSH Baru"
     echo -e " [2] Hapus Akun SSH"
     echo -e " [3] List Akun SSH Aktif"
     echo -e " [4] Ganti Domain Server"
     echo -e " [5] Cek Status Port & Service Tunneling"
-    echo -e " [6] Restart Semua Service Tunneling"
-    echo -e " [7] Pengaturan Banner SSH (/etc/issue.net)"
-    echo -e " [8] Jalankan Auto-Delete Expired"
-    echo -e " [9] Cek & Atur Auto-Kill Multi-Login (Per-Akun)"
-    echo -e " [10] Menu Service API & Bot Telegram"
+    echo -e " [6] Cek Statistik Bandwidth VPS (vnStat)"
+    echo -e " [7] Restart Semua Service Tunneling"
+    echo -e " [8] Pengaturan Banner SSH (/etc/issue.net)"
+    echo -e " [9] Jalankan Auto-Delete Expired"
+    echo -e " [10] Cek & Atur Auto-Kill Multi-Login (Per-Akun)"
+    echo -e " [11] Menu Service API & Bot Telegram"
     echo -e " [0] Keluar"
     echo -e "${C}======================================${NC}"
-    read -p " Pilih Opsi [0-10]: " opt
+    read -p " Pilih Opsi [0-11]: " opt
     case $opt in
         1)
             clear
@@ -822,6 +880,61 @@ while true; do
             ;;
         6)
             clear
+            echo -e "${C}======================================${NC}"
+            echo -e "${Y}       STATISTIK & KUOTA BANDWIDTH    ${NC}"
+            echo -e "${C}======================================${NC}"
+            echo -e "Status Saat Ini: $BW_INFO"
+            echo -e "--------------------------------------"
+            if command -v vnstat >/dev/null 2>&1; then
+                echo -e "${Y}[ Ringkasan Pemakaian Harian ]${NC}"
+                vnstat -d 2>/dev/null | tail -n 8
+                echo ""
+                echo -e "${Y}[ Pemakaian Bulanan ]${NC}"
+                vnstat -m 2>/dev/null | tail -n 6
+            else
+                echo -e "Detail Interface Jaringan:"
+                ip -s link
+            fi
+            echo -e "${C}======================================${NC}"
+            echo -e " [1] Set Kuota Bandwidth (Unlimited / Custom TB/GB)"
+            echo -e " [2] Reset ke Auto-Detect Provider VPS"
+            echo -e " [0] Kembali ke Menu Utama"
+            echo -e "${C}======================================${NC}"
+            read -p " Pilih Opsi [0-2]: " opt_bw
+            case $opt_bw in
+                1)
+                    mkdir -p /etc/premdigital
+                    echo -e "\nPilih Jenis Kuota VPS:"
+                    echo -e " [1] Unlimited (Unmetered Bandwidth)"
+                    echo -e " [2] 1000 GB (1 TB)"
+                    echo -e " [3] 2000 GB (2 TB)"
+                    echo -e " [4] 5000 GB (5 TB)"
+                    echo -e " [5] Custom (Ketik Sendiri, contoh: 500 GB)"
+                    read -p "Pilihan [1-5]: " b_opt
+                    case $b_opt in
+                        1) echo "Unlimited" > /etc/premdigital/bandwidth_quota.txt ;;
+                        2) echo "1000 GB" > /etc/premdigital/bandwidth_quota.txt ;;
+                        3) echo "2000 GB" > /etc/premdigital/bandwidth_quota.txt ;;
+                        4) echo "5000 GB" > /etc/premdigital/bandwidth_quota.txt ;;
+                        5) 
+                           read -p "Masukkan batas kuota (misal: 750 GB): " cust_q
+                           echo "$cust_q" > /etc/premdigital/bandwidth_quota.txt
+                           ;;
+                    esac
+                    echo -e "${G}Kuota bandwidth berhasil diatur!${NC}"
+                    sleep 1.5
+                    ;;
+                2)
+                    rm -f /etc/premdigital/bandwidth_quota.txt 2>/dev/null
+                    echo -e "${G}Kembali ke mode Auto-Detect provider VPS!${NC}"
+                    sleep 1.5
+                    ;;
+                *)
+                    ;;
+            esac
+            ;;
+        7)
+            clear
             echo -e "${Y}Merestart semua service tunneling...${NC}"
             systemctl restart ws-proxy 2>/dev/null
             systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
@@ -834,7 +947,7 @@ while true; do
             echo -e "${G}Semua service tunneling berhasil direstart!${NC}"
             sleep 1.5
             ;;
-        7)
+        8)
             clear
             echo -e "${C}======================================${NC}"
             echo -e "${Y}       PENGATURAN BANNER SSH          ${NC}"
@@ -859,7 +972,7 @@ while true; do
                     cat > /etc/issue.net << 'BANNEREOF'
 <br>
 <font color="#00ffff">========================================</font><br>
-<font color="#ffd700"><b>     ★ PREMDIGITAL VIP TUNNELING ★     </b></font><br>
+<font color="#ffd700"><b>       ★ PREMDIGITAL TUNNELING ★        </b></font><br>
 <font color="#00ffff">========================================</font><br>
 <font color="#ffffff"><b>      [ PERATURAN PENGGUNA SERVER ]    </b></font><br>
 <font color="#ff4d4d">  • DILARANG DDOS / HACKING / SCANNING  </font><br>
@@ -869,7 +982,8 @@ while true; do
 <font color="#00ffff">----------------------------------------</font><br>
 <font color="#00ff7f">  ✓ Server Uptime & High Speed Network  </font><br>
 <font color="#00ff7f">  ✓ Auto-Reboot Server Tiap 05:00 WIB   </font><br>
-<font color="#e0aaff">  ✓ Support & CS: t.me/premdigital      </font><br>
+<font color="#e0aaff">  ✓ Support & CS: https://wa.me/6283188458876 </font><br>
+<font color="#00ffff">  ✓ Website: https://www.premdigital.web.id </font><br>
 <font color="#00ffff">========================================</font><br>
 <font color="#ffd700">  Terima Kasih Atas Kepercayaan Anda!   </font><br>
 <font color="#00ffff">========================================</font><br>
@@ -879,7 +993,7 @@ BANNEREOF
                     cp -f /etc/issue.net /etc/motd 2>/dev/null || true
                     systemctl restart dropbear 2>/dev/null
                     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
-                    echo -e "${G}Banner PremDigital VIP berhasil dipasang & service direstart!${NC}"
+                    echo -e "${G}Banner PremDigital berhasil dipasang & service direstart!${NC}"
                     sleep 1.5
                     ;;
                 3)
@@ -894,14 +1008,14 @@ BANNEREOF
                     ;;
             esac
             ;;
-        8)
+        9)
             clear
             echo -e "Menjalankan penghapusan akun expired..."
             /usr/local/bin/auto-delete
             echo -e "${G}Penghapusan akun expired selesai!${NC}"
             sleep 1.5
             ;;
-        9)
+        10)
             clear
             echo -e "${C}======================================${NC}"
             echo -e "${Y}   FITUR AUTO-KILL MULTI-LOGIN        ${NC}"
@@ -939,7 +1053,7 @@ BANNEREOF
                     ;;
             esac
             ;;
-        10)
+        11)
             menu-service
             ;;
         0)
