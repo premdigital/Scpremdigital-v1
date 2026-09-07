@@ -2,11 +2,11 @@
 # ==========================================
 # PREMDIGITAL - SSH & VPN AUTO INSTALLER V1
 # ==========================================
-# OS Support: Ubuntu 20.04 / Debian 10+
+# OS Support: Ubuntu 20.04 / 22.04 / 24.04 / Debian 10+
 # ==========================================
 
 if [ "${EUID}" -ne 0 ]; then
-    echo -e "Mohon jalankan script ini sebagai root (sudo su)"
+    echo -e "\e[31mMohon jalankan script ini sebagai root (sudo su)\e[0m"
     exit 1
 fi
 
@@ -17,26 +17,47 @@ dpkg --configure -a
 apt-get -f install -y
 
 echo -e "\e[32m[INFO] Memulai Instalasi Script PremDigital...\e[0m"
-sleep 2
+sleep 1
 
 # 1. Update & Install Dependencies
-echo -e "[INFO] Update & Install Packages (Non-interactive)..."
+echo -e "\e[33m[INFO] Update & Install Packages (Non-interactive)...\e[0m"
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests
+apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools
 
 # 2. Setting Waktu & Timezone (WIB)
-echo -e "[INFO] Setting Timezone (WIB)..."
+echo -e "\e[33m[INFO] Setting Timezone (WIB)...\e[0m"
 ln -fs /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
 dpkg-reconfigure --frontend noninteractive tzdata
 
-# 3. Setup Direktori
+# 3. Setup Direktori & Setup Domain
+echo -e "\e[33m[INFO] Setup Direktori & Domain...\e[0m"
 mkdir -p /etc/premdigital/
 mkdir -p /usr/local/bin/
 touch /etc/premdigital/users.db
 
+MYIP=$(curl -sS ipv4.icanhazip.com 2>/dev/null || curl -sS ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+if [ ! -f /etc/vps-domain.txt ]; then
+    echo "$MYIP" > /etc/vps-domain.txt
+fi
+
+if [ -t 0 ]; then
+    clear
+    echo -e "\e[36m====================================================\e[0m"
+    echo -e "\e[33m         SETUP DOMAIN SERVER PREMDIGITAL           \e[0m"
+    echo -e "\e[36m====================================================\e[0m"
+    echo -e "IP VPS Anda terdeteksi: \e[32m$MYIP\e[0m"
+    read -p "Masukkan Domain / Host (Kosongkan jika pakai IP): " input_domain
+    if [ -n "$input_domain" ]; then
+        echo "$input_domain" > /etc/vps-domain.txt
+    fi
+fi
+DOMAIN=$(cat /etc/vps-domain.txt)
+
 # 4. Setting SSH OpenSSH (Port 22 & 2253)
-echo -e "[INFO] Setting OpenSSH..."
+echo -e "\e[33m[INFO] Setting OpenSSH...\e[0m"
+grep -qxF '/bin/false' /etc/shells || echo '/bin/false' >> /etc/shells
+grep -qxF '/usr/sbin/nologin' /etc/shells || echo '/usr/sbin/nologin' >> /etc/shells
 sed -i 's/#Port 22/Port 22/g' /etc/ssh/sshd_config
 sed -i '/Port 22/a Port 2253' /etc/ssh/sshd_config
 sed -i 's/#PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
@@ -47,16 +68,14 @@ echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
 systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
 
 # 5. Setting Dropbear (Port 109, 143)
-echo -e "[INFO] Setting Dropbear..."
-grep -qxF '/bin/false' /etc/shells || echo '/bin/false' >> /etc/shells
-grep -qxF '/usr/sbin/nologin' /etc/shells || echo '/usr/sbin/nologin' >> /etc/shells
+echo -e "\e[33m[INFO] Setting Dropbear...\e[0m"
 sed -i 's/NO_START=1/NO_START=0/g' /etc/default/dropbear
 sed -i 's/DROPBEAR_PORT=22/DROPBEAR_PORT=109/g' /etc/default/dropbear
 sed -i 's/DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-p 109 -p 143"/g' /etc/default/dropbear
 systemctl restart dropbear
 
 # 6. Setting WebSocket SSH Proxy (Smart Multiplexer Port 443, 80, 8880, 2082)
-echo -e "[INFO] Setting WebSocket SSH Proxy..."
+echo -e "\e[33m[INFO] Setting WebSocket SSH Proxy...\e[0m"
 cat > /usr/local/bin/ws-proxy << 'END'
 #!/usr/bin/python3
 import socket, threading, select, sys
@@ -79,13 +98,9 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
             target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             target_sock.connect((target_host, target_port))
             response = (
-                b"HTTP/1.1 101 Switching Protocols
-"
-                b"Upgrade: websocket
-"
-                b"Connection: Upgrade
-
-"
+                b"HTTP/1.1 101 Switching Protocols\r\n"
+                b"Upgrade: websocket\r\n"
+                b"Connection: Upgrade\r\n\r\n"
             )
             client_sock.sendall(response)
         # 3. Direct SSH Protocol biasa (SSH-2.0...)
@@ -181,7 +196,7 @@ systemctl enable ws-proxy
 systemctl restart ws-proxy
 
 # 7. Setting Stunnel (Port 4430 Internal & 8443)
-echo -e "[INFO] Setting Stunnel..."
+echo -e "\e[33m[INFO] Setting Stunnel...\e[0m"
 cat > /etc/stunnel/stunnel.conf << 'END'
 cert = /etc/stunnel/stunnel.pem
 client = no
@@ -198,7 +213,9 @@ accept = 8443
 connect = 127.0.0.1:700
 END
 
-openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
+-subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" \
+-out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem
 
 sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4 2>/dev/null || true
 echo "ENABLED=1" >> /etc/default/stunnel4
@@ -207,7 +224,7 @@ systemctl enable stunnel4 2>/dev/null || true
 systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
 
 # 8. Setting BadVPN UDPGW (Port 7100)
-echo -e "[INFO] Setting BadVPN UDPGW..."
+echo -e "\e[33m[INFO] Setting BadVPN UDPGW...\e[0m"
 wget -q -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/daybreakersx/premscript/master/badvpn-udpgw64"
 chmod +x /usr/bin/badvpn-udpgw
 
@@ -230,8 +247,8 @@ systemctl daemon-reload
 systemctl enable badvpn-udpgw 2>/dev/null || true
 systemctl restart badvpn-udpgw 2>/dev/null || true
 
-# 7. Setting Squid Proxy (Port 8080)
-echo -e "[INFO] Setting Squid..."
+# 9. Setting Squid Proxy (Port 8080)
+echo -e "\e[33m[INFO] Setting Squid...\e[0m"
 cat > /etc/squid/squid.conf <<-END
 acl localhost src 127.0.0.1/32
 acl localnet src 10.0.0.0/8
@@ -245,8 +262,8 @@ http_port 8080
 END
 systemctl restart squid
 
-# 8. Web API (Python Flask) - Port 5000
-echo -e "[INFO] Install Web API Backend..."
+# 10. Web API (Python Flask) - Port 5000
+echo -e "\e[33m[INFO] Install Web API Backend...\e[0m"
 cat > /usr/local/bin/vps-api <<-END
 #!/usr/bin/python3
 from flask import Flask, request, jsonify
@@ -290,11 +307,11 @@ def create_ssh():
             "durasi": f"{expired_days} Hari",
             "port_info": {
                 "tls": "443, 8443",
-                "http": "80, 8080",
-                "slowdns": "53, 5300",
-                "ssh_ohp": "9080",
-                "udp_custom": "1-65535",
-                "udpgw": "7100-7600"
+                "http": "80, 8880, 2082",
+                "dropbear": "109, 143",
+                "openssh": "22, 2253",
+                "udpgw": "7100",
+                "squid": "8080"
             },
             "payload_ws": "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
         }
@@ -318,10 +335,10 @@ Restart=always
 WantedBy=multi-user.target
 END
 systemctl enable vps-api
-systemctl start vps-api
+systemctl restart vps-api
 
-# 9. Bot Telegram Server-Side
-echo -e "[INFO] Setting Telegram Bot Base..."
+# 11. Bot Telegram Server-Side
+echo -e "\e[33m[INFO] Setting Telegram Bot Base...\e[0m"
 cat > /usr/local/bin/vps-bot <<-END
 #!/usr/bin/python3
 import requests, time, os, subprocess
@@ -335,7 +352,6 @@ try:
 except:
     DOMAIN = "IP_VPS"
 
-
 def process_message(text, chat_id):
     if text.startswith("/create"):
         parts = text.split()
@@ -345,7 +361,8 @@ def process_message(text, chat_id):
             hari = parts[3]
             os.system(f'useradd -m -s /bin/false -M {user}')
             os.system(f'echo "{user}:{pwd}" | chpasswd')
-            MSG = f"✅ AKUN SSH SUKSES DIBUAT\n━━━━━━━━━━━━━━━━━━\n👤 Username: {user}\n🔑 Password: {pwd}\n🌍 Host: {DOMAIN}\n⏳  Durasi: {hari} Hari\n━━━━━━━━━━━━━━━━━━\n🔌 Port Info:\n• TLS: 443, 8443\n• HTTP: 80, 8080\n• SlowDNS: 53, 5300\n• SSH OHP: 9080\n• UDP Custom: 1-65535\n• UDPGW: 7100-7600\n━━━━━━━━━━━━━━━━━━\n📥 Payload WS:\nGET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\n━━━━━━━━━━━━━━━━━━"
+            
+            MSG = f"✅ AKUN SSH SUKSES DIBUAT\n━━━━━━━━━━━━━━━━━━\n👤 Username: {user}\n🔑 Password: {pwd}\n🌍 Host: {DOMAIN}\n⏳  Durasi: {hari} Hari\n━━━━━━━━━━━━━━━━━━\n🔌 Port Info:\n• TLS: 443, 8443\n• HTTP: 80, 8880, 2082\n• Dropbear: 109, 143\n• OpenSSH: 22, 2253\n• UDPGW: 7100\n• Squid: 8080\n━━━━━━━━━━━━━━━━━━\n📥 Payload WS:\nGET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\n━━━━━━━━━━━━━━━━━━"
             requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id": chat_id, "text": MSG})
         else:
             requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage?chat_id={chat_id}&text=Format salah. Gunakan: /create user password hari")
@@ -378,9 +395,10 @@ Restart=always
 WantedBy=multi-user.target
 END
 systemctl enable vps-bot
+systemctl restart vps-bot 2>/dev/null || true
 
-# 10. CLI Menu & Commands
-echo -e "[INFO] Setting up CLI Menu..."
+# 12. CLI Menu & Commands
+echo -e "\e[33m[INFO] Setting up CLI Menu...\e[0m"
 cat > /usr/bin/menu << 'END'
 #!/bin/bash
 Y="\e[33m"
@@ -389,18 +407,33 @@ R="\e[31m"
 G="\e[32m"
 NC="\e[0m"
 
+check_port() {
+    local port=$1
+    if ss -tuln 2>/dev/null | grep -q ":${port} " || netstat -tuln 2>/dev/null | grep -q ":${port} "; then
+        echo -e "${G}ONLINE${NC}"
+    else
+        echo -e "${R}OFFLINE${NC}"
+    fi
+}
+
+check_service() {
+    local sname=$1
+    if systemctl is-active --quiet "$sname" 2>/dev/null; then
+        echo -e "${G}RUNNING${NC}"
+    else
+        echo -e "${R}STOPPED${NC}"
+    fi
+}
+
 while true; do
-    # Ambil Info Jaringan (IP, ISP, Kota)
     IP=$(curl -sS ipv4.icanhazip.com 2>/dev/null)
     [ -z "$IP" ] && IP=$(curl -sS ipinfo.io/ip 2>/dev/null)
-
     ISP=$(curl -s http://ip-api.com/line/?fields=isp 2>/dev/null)
     [ -z "$ISP" ] && ISP=$(curl -s ipinfo.io/org 2>/dev/null | cut -d " " -f 2-10)
     [ -z "$ISP" ] && ISP="Unknown ISP"
-
     CITY=$(curl -s http://ip-api.com/line/?fields=city 2>/dev/null)
     [ -z "$CITY" ] && CITY=$(curl -s ipinfo.io/city 2>/dev/null)
-
+    
     if [ -f /etc/vps-domain.txt ]; then
         DOMAIN=$(cat /etc/vps-domain.txt)
     else
@@ -415,46 +448,53 @@ while true; do
     echo -e " RAM     : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
     echo -e " ISP     : $ISP"
     echo -e " Kota    : $CITY"
-    echo -e " Domain  : $DOMAIN"
-    echo -e " IP VPS  : $IP"
+    echo -e " Domain  : ${Y}$DOMAIN${NC}"
+    echo -e " IP VPS  : ${G}$IP${NC}"
     echo -e "${C}======================================${NC}"
     echo -e " [1] Buat Akun SSH Baru"
     echo -e " [2] Hapus Akun SSH"
     echo -e " [3] List Akun SSH Aktif"
     echo -e " [4] Ganti Domain Server"
-    echo -e " [5] Jalankan Auto-Delete Expired"
-    echo -e " [6] Menu Service API & Bot Telegram"
+    echo -e " [5] Cek Status Port & Service Tunneling"
+    echo -e " [6] Restart Semua Service Tunneling"
+    echo -e " [7] Jalankan Auto-Delete Expired"
+    echo -e " [8] Menu Service API & Bot Telegram"
     echo -e " [0] Keluar"
     echo -e "${C}======================================${NC}"
-    read -p " Pilih Opsi [0-6]: " opt
-
+    read -p " Pilih Opsi [0-8]: " opt
     case $opt in
         1)
             clear
             read -p "Username: " user
+            if id "$user" &>/dev/null; then
+                echo -e "${R}Error: Username $user sudah ada di sistem!${NC}"
+                sleep 2
+                continue
+            fi
             read -p "Password: " pass
             read -p "Berapa Hari: " masaaktif
             exp=$(date -d "+$masaaktif days" +"%Y-%m-%d")
             useradd -e $exp -s /bin/false -M $user
             echo -e "$user:$pass" | chpasswd
-            echo -e "
-${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
+            
+            clear
+            echo -e "${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
             echo -e "━━━━━━━━━━━━━━━━━━"
             echo -e "👤 Username: $user"
             echo -e "🔑 Password: $pass"
             echo -e "🌍 Host: $DOMAIN"
-            echo -e "⏳  Durasi: $masaaktif Hari"
+            echo -e "⏳  Durasi: $masaaktif Hari ($exp)"
             echo -e "━━━━━━━━━━━━━━━━━━"
             echo -e "🔌 Port Info:"
-            echo -e "• TLS: 443, 8443"
-            echo -e "• HTTP: 80, 8080"
-            echo -e "• SlowDNS: 53, 5300"
-            echo -e "• SSH OHP: 9080"
-            echo -e "• UDP Custom: 1-65535"
-            echo -e "• UDPGW: 7100-7600"
+            echo -e "• WebSocket TLS / SSL  : 443, 8443"
+            echo -e "• WebSocket Direct/CDN : 80, 8880, 2082"
+            echo -e "• Dropbear SSH         : 109, 143"
+            echo -e "• OpenSSH              : 22, 2253"
+            echo -e "• BadVPN UDPGW         : 7100"
+            echo -e "• Squid Proxy          : 8080"
             echo -e "━━━━━━━━━━━━━━━━━━"
-            echo -e "📥 Payload WS:"
-            echo -e "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
+            echo -e "📥 Payload WS (Bisa tanpa TLS / pakai TLS):"
+            echo -e "GET / HTTP/1.1[crlf]Host: $DOMAIN[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
             echo -e "━━━━━━━━━━━━━━━━━━"
             echo ""
             read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
@@ -462,9 +502,8 @@ ${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
         2)
             clear
             read -p "Masukkan Username yang mau dihapus: " user
-            userdel -f $user
-            echo -e "
-${R}Akun $user berhasil dihapus.${NC}"
+            userdel -f $user 2>/dev/null
+            echo -e "${R}Akun $user berhasil dihapus.${NC}"
             sleep 1.5
             ;;
         3)
@@ -487,19 +526,55 @@ ${R}Akun $user berhasil dihapus.${NC}"
             echo -e "Domain Saat Ini: ${Y}$DOMAIN${NC}"
             read -p "Masukkan Domain Baru: " newdomain
             echo "$newdomain" > /etc/vps-domain.txt
-            echo -e "
-${Y}Domain berhasil diubah menjadi: $newdomain${NC}"
+            echo -e "${Y}Domain berhasil diubah menjadi: $newdomain${NC}"
             sleep 1.5
             ;;
         5)
             clear
-            echo -e "Menjalankan penghapusan akun expired..."
-            /usr/local/bin/auto-delete
-            echo -e "
-${G}Penghapusan akun expired selesai!${NC}"
-            sleep 1.5
+            echo -e "${C}======================================${NC}"
+            echo -e "${Y}    STATUS SERVICE & PORT TUNNELING   ${NC}"
+            echo -e "${C}======================================${NC}"
+            echo -e " • WebSocket Proxy    : $(check_service ws-proxy)"
+            echo -e " • Stunnel SSL        : $(check_service stunnel4)"
+            echo -e " • Dropbear SSH       : $(check_service dropbear)"
+            echo -e " • OpenSSH Server     : $(check_service ssh)"
+            echo -e " • BadVPN UDPGW       : $(check_service badvpn-udpgw)"
+            echo -e " • Squid Proxy        : $(check_service squid)"
+            echo -e " • Web API Server     : $(check_service vps-api)"
+            echo -e " • Telegram Bot       : $(check_service vps-bot)"
+            echo -e "${C}--------------------------------------${NC}"
+            echo -e " • Port 443 (WS Multiplexer) : $(check_port 443)"
+            echo -e " • Port 80 (HTTP WebSocket)  : $(check_port 80)"
+            echo -e " • Port 109 (Dropbear)       : $(check_port 109)"
+            echo -e " • Port 22 (OpenSSH)         : $(check_port 22)"
+            echo -e " • Port 7100 (BadVPN UDPGW)  : $(check_port 7100)"
+            echo -e " • Port 8080 (Squid Proxy)   : $(check_port 8080)"
+            echo -e "${C}======================================${NC}"
+            echo ""
+            read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
             ;;
         6)
+            clear
+            echo -e "${Y}Merestart semua service tunneling...${NC}"
+            systemctl restart ws-proxy
+            systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
+            systemctl restart dropbear
+            systemctl restart badvpn-udpgw 2>/dev/null
+            systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+            systemctl restart squid 2>/dev/null
+            systemctl restart vps-api 2>/dev/null
+            systemctl restart vps-bot 2>/dev/null
+            echo -e "${G}Semua service tunneling berhasil direstart!${NC}"
+            sleep 1.5
+            ;;
+        7)
+            clear
+            echo -e "Menjalankan penghapusan akun expired..."
+            /usr/local/bin/auto-delete
+            echo -e "${G}Penghapusan akun expired selesai!${NC}"
+            sleep 1.5
+            ;;
+        8)
             menu-service
             ;;
         0)
@@ -515,7 +590,7 @@ done
 END
 chmod +x /usr/bin/menu
 
-# 11. CLI Menu Service (API & Bot)
+# 13. CLI Menu Service (API & Bot)
 cat > /usr/bin/menu-service << 'END'
 #!/bin/bash
 Y="\e[33m"
@@ -536,24 +611,21 @@ while true; do
     echo -e " [0] Kembali ke Menu Utama"
     echo -e "${C}======================================${NC}"
     read -p " Pilih Opsi [0-4]: " opt
-
     case $opt in
         1)
             clear
             read -p "Masukkan Secret Key Baru: " newkey
-            sed -i "s/API_SECRET = ".*"/API_SECRET = "$newkey"/g" /usr/local/bin/vps-api
+            sed -i "s/API_SECRET = \".*\"/API_SECRET = \"$newkey\"/g" /usr/local/bin/vps-api
             systemctl restart vps-api
-            echo -e "
-${G}Secret Key berhasil diganti!${NC}"
+            echo -e "\n${G}Secret Key berhasil diganti!${NC}"
             sleep 1.5
             ;;
         2)
             clear
             read -p "Masukkan Token Bot Telegram: " newtoken
-            sed -i "s/BOT_TOKEN = ".*"/BOT_TOKEN = "$newtoken"/g" /usr/local/bin/vps-bot
+            sed -i "s/BOT_TOKEN = \".*\"/BOT_TOKEN = \"$newtoken\"/g" /usr/local/bin/vps-bot
             systemctl restart vps-bot
-            echo -e "
-${G}Token Bot berhasil diganti!${NC}"
+            echo -e "\n${G}Token Bot berhasil diganti!${NC}"
             sleep 1.5
             ;;
         3)
@@ -565,19 +637,18 @@ ${G}Token Bot berhasil diganti!${NC}"
             systemctl restart badvpn-udpgw 2>/dev/null
             systemctl restart vps-api
             systemctl restart vps-bot
-            echo -e "
-${G}Service API & Bot berhasil direstart!${NC}"
+            echo -e "\n${G}Service API & Bot berhasil direstart!${NC}"
             sleep 1.5
             ;;
         4)
             clear
-            echo -e "${Y}Mencoba menembak API di localhost (Port 5000)...${NC}
-"
+            echo -e "${Y}Mencoba menembak API di localhost (Port 5000)...${NC}"
             API_KEY=$(grep "API_SECRET" /usr/local/bin/vps-api | cut -d '"' -f 2)
-            curl -X POST http://127.0.0.1:5000/api/create                  -H "Content-Type: application/json"                  -d '{"secret": "'"$API_KEY"'", "username": "testapi", "password": "123", "expired": "1"}'
+            curl -X POST http://127.0.0.1:5000/api/create \
+                 -H "Content-Type: application/json" \
+                 -d '{"secret": "'"$API_KEY"'", "username": "testapi", "password": "123", "expired": "1"}'
             echo ""
-            echo -e "
-Jika muncul JSON success, berarti API BEKERJA NORMAL!"
+            echo -e "Jika muncul JSON success, berarti API BEKERJA NORMAL!"
             userdel -f testapi 2>/dev/null
             echo ""
             read -r -p "Tekan [Enter] untuk kembali ke menu service..." dummy
@@ -594,8 +665,8 @@ done
 END
 chmod +x /usr/bin/menu-service
 
-# 12. Auto Delete Expired Accounts (Cronjob)
-echo -e "[INFO] Setting Auto Delete Expired..."
+# 14. Auto Delete Expired Accounts (Cronjob)
+echo -e "\e[33m[INFO] Setting Auto Delete Expired...\e[0m"
 cat > /usr/local/bin/auto-delete << 'END'
 #!/bin/bash
 hariini=$(date +%Y-%m-%d)
@@ -614,6 +685,30 @@ END
 chmod +x /usr/local/bin/auto-delete
 
 # Cronjob jalan tiap jam 00:00 (Tengah Malam)
-(crontab -l 2>/dev/null; echo "0 0 * * * /usr/local/bin/auto-delete") | crontab -
+(crontab -l 2>/dev/null | grep -v "/usr/local/bin/auto-delete"; echo "0 0 * * * /usr/local/bin/auto-delete") | crontab -
 
+# Alias menu
+grep -qxF "alias menu='/usr/bin/menu'" ~/.bashrc || echo "alias menu='/usr/bin/menu'" >> ~/.bashrc
 
+# 15. Ringkasan Instalasi Tunneling
+clear
+echo -e "\e[36m====================================================\e[0m"
+echo -e "\e[33m   INSTALASI TUNNELING PREMDIGITAL V1 SUKSES!       \e[0m"
+echo -e "\e[36m====================================================\e[0m"
+echo -e " 🌍 Host / Domain : \e[32m$DOMAIN\e[0m"
+echo -e " 🌐 IP VPS        : \e[32m$MYIP\e[0m"
+echo -e "\e[36m----------------------------------------------------\e[0m"
+echo -e " 🔌 INFORMASI PORT TUNNELING:\e[0m"
+echo -e " • WebSocket Direct / CDN HTTP : \e[33m80, 8880, 2082\e[0m"
+echo -e " • WebSocket SSL / TLS (Multi) : \e[33m443, 8443\e[0m (Bisa tanpa TLS / pakai TLS)"
+echo -e " • Dropbear SSH                : \e[33m109, 143\e[0m"
+echo -e " • OpenSSH                     : \e[33m22, 2253\e[0m"
+echo -e " • BadVPN UDPGW (Gaming/Call)  : \e[33m7100\e[0m"
+echo -e " • Squid Proxy                 : \e[33m8080\e[0m"
+echo -e " • Web API Backend Server      : \e[33m5000\e[0m"
+echo -e "\e[36m----------------------------------------------------\e[0m"
+echo -e " 📥 PAYLOAD WEBSOCKET (HTTP Custom / Injector):"
+echo -e " \e[32mGET / HTTP/1.1[crlf]Host: $DOMAIN[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\e[0m"
+echo -e "\e[36m----------------------------------------------------\e[0m"
+echo -e " 👉 Ketik \e[33mmenu\e[0m di terminal VPS Anda untuk membuka Panel CLI."
+echo -e "\e[36m====================================================\e[0m"
