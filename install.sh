@@ -698,10 +698,11 @@ while true; do
     echo -e " [6] Restart Semua Service Tunneling"
     echo -e " [7] Pengaturan Banner SSH (/etc/issue.net)"
     echo -e " [8] Jalankan Auto-Delete Expired"
-    echo -e " [9] Menu Service API & Bot Telegram"
+    echo -e " [9] Cek & Atur Auto-Kill Multi-Login (Per-Akun)"
+    echo -e " [10] Menu Service API & Bot Telegram"
     echo -e " [0] Keluar"
     echo -e "${C}======================================${NC}"
-    read -p " Pilih Opsi [0-9]: " opt
+    read -p " Pilih Opsi [0-10]: " opt
     case $opt in
         1)
             clear
@@ -713,6 +714,24 @@ while true; do
             fi
             read -p "Password: " pass
             read -p "Berapa Hari: " masaaktif
+            
+            echo -e "\nPilih Batas Multi-Login (Max IP):"
+            echo -e " [1] 1 IP (Max 1 Device)"
+            echo -e " [2] 2 IP (Max 2 Device)"
+            echo -e " [3] 3 IP (Max 3 Device)"
+            echo -e " [4] 5 IP (Max 5 Device)"
+            read -p "Pilihan [1-4] (Default 2 IP): " max_ip_opt
+            case $max_ip_opt in
+                1) max_ip=1 ;;
+                2) max_ip=2 ;;
+                3) max_ip=3 ;;
+                4) max_ip=5 ;;
+                *) max_ip=2 ;;
+            esac
+            
+            mkdir -p /etc/premdigital/multilogin
+            echo "$max_ip" > "/etc/premdigital/multilogin/$user"
+
             exp=$(date -d "+$masaaktif days" +"%Y-%m-%d")
             useradd -e $exp -s /bin/false -M $user
             echo -e "$user:$pass" | chpasswd
@@ -720,10 +739,11 @@ while true; do
             clear
             echo -e "${Y}✅ AKUN SSH SUKSES DIBUAT${NC}"
             echo -e "━━━━━━━━━━━━━━━━━━"
-            echo -e "👤 Username: $user"
-            echo -e "🔑 Password: $pass"
-            echo -e "🌍 Host: $DOMAIN"
-            echo -e "⏳  Durasi: $masaaktif Hari ($exp)"
+            echo -e "👤 Username   : $user"
+            echo -e "🔑 Password   : $pass"
+            echo -e "🌍 Host       : $DOMAIN"
+            echo -e "⏳ Durasi     : $masaaktif Hari ($exp)"
+            echo -e "📱 Max Login  : $max_ip IP / Device"
             echo -e "━━━━━━━━━━━━━━━━━━"
             echo -e "🔌 Port Info:"
             echo -e "• WebSocket TLS / SSL  : 443, 8443"
@@ -743,6 +763,7 @@ while true; do
             clear
             read -p "Masukkan Username yang mau dihapus: " user
             userdel -f $user 2>/dev/null
+            rm -f "/etc/premdigital/multilogin/$user" 2>/dev/null
             echo -e "${R}Akun $user berhasil dihapus.${NC}"
             sleep 1.5
             ;;
@@ -751,10 +772,16 @@ while true; do
             echo -e "${C}======================================${NC}"
             echo -e "${Y}         LIST AKUN SSH AKTIF          ${NC}"
             echo -e "${C}======================================${NC}"
+            printf "%-14s %-12s %-10s\n" "USERNAME" "EXPIRED" "MAX IP"
+            echo -e "--------------------------------------"
             awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd | while read line
             do
                 exp=$(chage -l $line | grep "Account expires" | awk -F": " '{print $2}')
-                echo -e "Username: ${Y}$line${NC} | Exp: ${R}$exp${NC}"
+                limit="2 IP"
+                if [ -f "/etc/premdigital/multilogin/$line" ]; then
+                    limit="$(cat "/etc/premdigital/multilogin/$line") IP"
+                fi
+                printf "%-14s %-12s %-10s\n" "$line" "$exp" "$limit"
             done
             echo -e "${C}======================================${NC}"
             echo ""
@@ -875,6 +902,44 @@ BANNEREOF
             sleep 1.5
             ;;
         9)
+            clear
+            echo -e "${C}======================================${NC}"
+            echo -e "${Y}   FITUR AUTO-KILL MULTI-LOGIN        ${NC}"
+            echo -e "${C}======================================${NC}"
+            echo -e "Status: ${G}AKTIF (Multi-Device Sesuai Akun)${NC}"
+            echo -e "Pilihan IP: 1 IP, 2 IP, 3 IP, atau 5 IP"
+            echo -e "Script : /usr/local/bin/auto-kill-multilogin"
+            echo -e "Cronjob: Berjalan otomatis setiap 2 Menit"
+            echo -e "--------------------------------------"
+            echo -e " [1] Cek Log Pelanggaran Multi-Login"
+            echo -e " [2] Jalankan Deteksi & Kill Sekarang"
+            echo -e " [0] Kembali ke Menu Utama"
+            echo -e "${C}======================================${NC}"
+            read -p " Pilih Opsi [0-2]: " opt_multi
+            case $opt_multi in
+                1)
+                    clear
+                    echo -e "${Y}=== LOG PELANGGARAN MULTI-LOGIN ===${NC}"
+                    if [ -f /var/log/multilogin.log ]; then
+                        tail -n 30 /var/log/multilogin.log
+                    else
+                        echo -e "Belum ada log pelanggaran multi-login."
+                    fi
+                    echo ""
+                    read -r -p "Tekan [Enter] untuk kembali..." dummy
+                    ;;
+                2)
+                    clear
+                    echo -e "${Y}Memindai seluruh sesi koneksi pengguna...${NC}"
+                    /usr/local/bin/auto-kill-multilogin
+                    echo -e "${G}Selesai memeriksa sesi & menertibkan limit login!${NC}"
+                    sleep 1.5
+                    ;;
+                *)
+                    ;;
+            esac
+            ;;
+        10)
             menu-service
             ;;
         0)
@@ -965,8 +1030,8 @@ done
 END
 chmod +x /usr/bin/menu-service
 
-# 14. Auto Delete Expired Accounts (Cronjob)
-echo -e "\e[33m[INFO] Setting Auto Delete Expired...\e[0m"
+# 14. Auto Delete Expired Accounts & Multi-Login Auto Kill (Max 2 IP)
+echo -e "\e[33m[INFO] Setting Auto Delete Expired & Multi-Login Auto Kill...\e[0m"
 cat > /usr/local/bin/auto-delete << 'END'
 #!/bin/bash
 hariini=$(date +%Y-%m-%d)
@@ -977,6 +1042,7 @@ do
         tgl_exp=$(date -d"$exp" +%Y-%m-%d)
         if [[ "$tgl_exp" < "$hariini" ]]; then
             userdel -f $line
+            rm -f "/etc/premdigital/multilogin/$line" 2>/dev/null
             echo "Akun $line telah dihapus karena expired."
         fi
     fi
@@ -984,8 +1050,44 @@ done
 END
 chmod +x /usr/local/bin/auto-delete
 
-# Cronjob jalan tiap jam 00:00 (Tengah Malam)
-(crontab -l 2>/dev/null | grep -v "/usr/local/bin/auto-delete"; echo "0 0 * * * /usr/local/bin/auto-delete") | crontab -
+# Script Auto-Kill Multi Login Dinamis (Per Akun: 1, 2, 3, atau 5 IP)
+cat > /usr/local/bin/auto-kill-multilogin << 'END'
+#!/bin/bash
+LOG_FILE="/var/log/multilogin.log"
+LIMIT_DIR="/etc/premdigital/multilogin"
+
+mkdir -p "$LIMIT_DIR"
+touch $LOG_FILE
+
+# Ambil semua user SSH non-system (UID >= 1000)
+awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd | while read -r user; do
+    # Tentukan batas multi login untuk akun ini (Default 2 IP jika belum tersetting)
+    max_limit=2
+    if [ -f "$LIMIT_DIR/$user" ]; then
+        user_val=$(cat "$LIMIT_DIR/$user" | tr -dc '0-9')
+        if [ -n "$user_val" ]; then
+            max_limit=$user_val
+        fi
+    fi
+
+    # Hitung proses unik SSH & Dropbear untuk user ini
+    pids=$(pgrep -u "$user" -f "dropbear|sshd: $user" 2>/dev/null)
+    total_sess=$(echo "$pids" | grep -v '^$' | wc -l)
+    
+    if [ "$total_sess" -gt "$max_limit" ]; then
+        timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+        echo "[$timestamp] User '$user' melanggar multi-login! Total sesi: $total_sess (Max Limit: $max_limit IP). Mematikan sesi..." >> $LOG_FILE
+        # Matikan semua sesi user yang melanggar agar adil
+        kill -9 $pids 2>/dev/null
+    fi
+done
+END
+chmod +x /usr/local/bin/auto-kill-multilogin
+
+# Cronjob jalan tiap tengah malam (auto-delete) dan tiap 2 menit (auto-kill multi-login)
+(crontab -l 2>/dev/null | grep -v "/usr/local/bin/auto-delete" | grep -v "/usr/local/bin/auto-kill-multilogin"; \
+ echo "0 0 * * * /usr/local/bin/auto-delete"; \
+ echo "*/2 * * * * /usr/local/bin/auto-kill-multilogin") | crontab -
 
 # Alias menu
 grep -qxF "alias menu='/usr/bin/menu'" ~/.bashrc || echo "alias menu='/usr/bin/menu'" >> ~/.bashrc

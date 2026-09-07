@@ -44,6 +44,8 @@ rm -f /usr/local/bin/vps-bot
 rm -f /usr/bin/menu
 rm -f /usr/bin/menu-service
 rm -f /usr/local/bin/auto-delete
+rm -f /usr/local/bin/auto-kill-multilogin
+rm -f /var/log/multilogin.log
 
 echo -e "\e[33m[4/5] Menghapus konfigurasi dan database...\e[0m"
 rm -rf /etc/premdigital/
@@ -51,8 +53,8 @@ rm -f /etc/vps-domain.txt
 rm -f /etc/stunnel/stunnel.pem
 rm -f /etc/stunnel/stunnel.conf
 
-# Hapus cronjob auto-delete
-crontab -l 2>/dev/null | grep -v "/usr/local/bin/auto-delete" | crontab -
+# Hapus cronjob auto-delete & auto-kill
+crontab -l 2>/dev/null | grep -v "/usr/local/bin/auto-delete" | grep -v "/usr/local/bin/auto-kill-multilogin" | crontab -
 
 # Hapus alias menu
 sed -i '/alias menu=/d' ~/.bashrc 2>/dev/null
