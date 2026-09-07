@@ -39,40 +39,196 @@ touch /etc/premdigital/users.db
 echo -e "[INFO] Setting OpenSSH..."
 sed -i 's/#Port 22/Port 22/g' /etc/ssh/sshd_config
 sed -i '/Port 22/a Port 2253' /etc/ssh/sshd_config
-systemctl restart ssh
-systemctl restart sshd
+sed -i 's/#PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+[ -d /etc/ssh/sshd_config.d ] && echo "PasswordAuthentication yes" > /etc/ssh/sshd_config.d/01-permitpassword.conf
+systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
 
-# 5. Setting Dropbear (Port 109)
+# 5. Setting Dropbear (Port 109, 143)
 echo -e "[INFO] Setting Dropbear..."
+grep -qxF '/bin/false' /etc/shells || echo '/bin/false' >> /etc/shells
+grep -qxF '/usr/sbin/nologin' /etc/shells || echo '/usr/sbin/nologin' >> /etc/shells
 sed -i 's/NO_START=1/NO_START=0/g' /etc/default/dropbear
 sed -i 's/DROPBEAR_PORT=22/DROPBEAR_PORT=109/g' /etc/default/dropbear
-sed -i 's/DROPBEAR_EXTRA_ARGS=/DROPBEAR_EXTRA_ARGS="-p 109"/g' /etc/default/dropbear
+sed -i 's/DROPBEAR_EXTRA_ARGS=.*/DROPBEAR_EXTRA_ARGS="-p 109 -p 143"/g' /etc/default/dropbear
 systemctl restart dropbear
 
-# 6. Setting Stunnel (Port 443 & 8443)
+# 6. Setting WebSocket SSH Proxy (Smart Multiplexer Port 443, 80, 8880, 2082)
+echo -e "[INFO] Setting WebSocket SSH Proxy..."
+cat > /usr/local/bin/ws-proxy << 'END'
+#!/usr/bin/python3
+import socket, threading, select, sys
+
+def handle_client(client_sock, target_host, target_port, tls_target_port=None):
+    target_sock = None
+    try:
+        client_sock.settimeout(10.0)
+        data = client_sock.recv(4096)
+        if not data:
+            return
+
+        # 1. Deteksi TLS ClientHello (Byte pertama 0x16 = TLS Handshake)
+        if data[0] == 0x16 and tls_target_port:
+            target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            target_sock.connect(('127.0.0.1', tls_target_port))
+            target_sock.sendall(data)
+        # 2. Deteksi Request HTTP / WebSocket Upgrade (HTTP Custom Payload tanpa TLS)
+        elif b'HTTP/' in data or b'Upgrade: websocket' in data or b'GET ' in data or b'POST ' in data or b'CONNECT ' in data:
+            target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            target_sock.connect((target_host, target_port))
+            response = (
+                b"HTTP/1.1 101 Switching Protocols
+"
+                b"Upgrade: websocket
+"
+                b"Connection: Upgrade
+
+"
+            )
+            client_sock.sendall(response)
+        # 3. Direct SSH Protocol biasa (SSH-2.0...)
+        else:
+            target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            target_sock.connect((target_host, target_port))
+            target_sock.sendall(data)
+
+        client_sock.settimeout(None)
+        target_sock.settimeout(None)
+
+        sockets = [client_sock, target_sock]
+        while True:
+            r, _, x = select.select(sockets, [], sockets, 120)
+            if x or not r:
+                break
+            for s in r:
+                other = target_sock if s is client_sock else client_sock
+                buf = s.recv(8192)
+                if not buf:
+                    return
+                other.sendall(buf)
+    except Exception:
+        pass
+    finally:
+        try: client_sock.close()
+        except: pass
+        if target_sock:
+            try: target_sock.close()
+            except: pass
+
+def start_listener(listen_host, listen_port, target_host, target_port, tls_target_port=None):
+    try:
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((listen_host, listen_port))
+        server.listen(200)
+        while True:
+            try:
+                client_sock, _ = server.accept()
+                t = threading.Thread(
+                    target=handle_client,
+                    args=(client_sock, target_host, target_port, tls_target_port),
+                    daemon=True
+                )
+                t.start()
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"Error binding {listen_host}:{listen_port} -> {e}", file=sys.stderr)
+
+if __name__ == '__main__':
+    # Port 443: Smart Multiplexer (Konek HTTP WebSocket langsung tanpa TLS, atau auto-forward TLS ke Stunnel)
+    t_443 = threading.Thread(target=start_listener, args=('0.0.0.0', 443, '127.0.0.1', 109, 4430), daemon=True)
+    t_443.start()
+
+    # Port 80: HTTP WebSocket Direct / CDN
+    t_80 = threading.Thread(target=start_listener, args=('0.0.0.0', 80, '127.0.0.1', 109), daemon=True)
+    t_80.start()
+
+    # Port 700: Backend Decrypted TLS dari Stunnel
+    t_700 = threading.Thread(target=start_listener, args=('127.0.0.1', 700, '127.0.0.1', 109), daemon=True)
+    t_700.start()
+
+    # Port 8880 & 2082: Alternatif HTTP WS
+    t_8880 = threading.Thread(target=start_listener, args=('0.0.0.0', 8880, '127.0.0.1', 109), daemon=True)
+    t_8880.start()
+    t_2082 = threading.Thread(target=start_listener, args=('0.0.0.0', 2082, '127.0.0.1', 109), daemon=True)
+    t_2082.start()
+
+    t_443.join()
+END
+chmod +x /usr/local/bin/ws-proxy
+
+cat > /etc/systemd/system/ws-proxy.service << 'END'
+[Unit]
+Description=WebSocket SSH Proxy Smart Multiplexer
+After=network.target dropbear.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/local/bin/ws-proxy
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+END
+
+systemctl daemon-reload
+systemctl enable ws-proxy
+systemctl restart ws-proxy
+
+# 7. Setting Stunnel (Port 4430 Internal & 8443)
 echo -e "[INFO] Setting Stunnel..."
-cat > /etc/stunnel/stunnel.conf <<-END
+cat > /etc/stunnel/stunnel.conf << 'END'
 cert = /etc/stunnel/stunnel.pem
 client = no
 socket = a:SO_REUSEADDR=1
 socket = l:TCP_NODELAY=1
 socket = r:TCP_NODELAY=1
 
-[dropbear]
-accept = 443
-connect = 127.0.0.1:109
+[ws-tls]
+accept = 127.0.0.1:4430
+connect = 127.0.0.1:700
 
-[openssh]
+[openssh-tls]
 accept = 8443
-connect = 127.0.0.1:22
+connect = 127.0.0.1:700
 END
 
-openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
--subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" \
--out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem
+openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 -subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem
 
-systemctl enable stunnel4
-systemctl restart stunnel4
+sed -i 's/ENABLED=0/ENABLED=1/g' /etc/default/stunnel4 2>/dev/null || true
+echo "ENABLED=1" >> /etc/default/stunnel4
+
+systemctl enable stunnel4 2>/dev/null || true
+systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
+
+# 8. Setting BadVPN UDPGW (Port 7100)
+echo -e "[INFO] Setting BadVPN UDPGW..."
+wget -q -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/daybreakersx/premscript/master/badvpn-udpgw64"
+chmod +x /usr/bin/badvpn-udpgw
+
+cat > /etc/systemd/system/badvpn-udpgw.service << 'END'
+[Unit]
+Description=BadVPN UDPGW Service (Port 7100)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7100 --max-clients 500 --max-connections-for-client 20
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+END
+
+systemctl daemon-reload
+systemctl enable badvpn-udpgw 2>/dev/null || true
+systemctl restart badvpn-udpgw 2>/dev/null || true
 
 # 7. Setting Squid Proxy (Port 8080)
 echo -e "[INFO] Setting Squid..."
@@ -403,6 +559,10 @@ ${G}Token Bot berhasil diganti!${NC}"
         3)
             clear
             echo -e "Merestart Service..."
+            systemctl restart ws-proxy
+            systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
+            systemctl restart dropbear
+            systemctl restart badvpn-udpgw 2>/dev/null
             systemctl restart vps-api
             systemctl restart vps-bot
             echo -e "
