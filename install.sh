@@ -543,6 +543,7 @@ echo -e "\e[33m[INFO] Setting Telegram Bot Base...\e[0m"
 cat > /usr/local/bin/vps-bot <<-END
 #!/usr/bin/python3
 import requests, time, os, subprocess
+from datetime import datetime, timedelta
 
 BOT_TOKEN = "ISI_TOKEN_BOT_DISINI"
 LAST_UPDATE_ID = 0
@@ -556,17 +557,59 @@ except:
 def process_message(text, chat_id):
     if text.startswith("/create"):
         parts = text.split()
-        if len(parts) == 4:
+        if len(parts) >= 4:
             user = parts[1]
             pwd = parts[2]
             hari = parts[3]
-            os.system(f'useradd -m -s /bin/false -M {user}')
+            
+            # Deteksi argumen tambahan (IP Limit)
+            ip_limit = parts[4] if len(parts) > 4 else "2"
+            
+            # Setup Kuota otomatis berdasarkan IP Limit
+            if ip_limit == "1":
+                kuota_gb = "50"
+            elif ip_limit == "2":
+                kuota_gb = "70"
+            elif ip_limit == "3":
+                kuota_gb = "100"
+            elif ip_limit == "5":
+                kuota_gb = "150"
+            else:
+                kuota_gb = "70" # Default fallback
+            
+            # Cek otomatis jika VPS Unlimited, maka bypass input kuota user menjadi 0
+            try:
+                vps_quota = subprocess.check_output("if [ -f /etc/premdigital/bandwidth_quota.txt ]; then cat /etc/premdigital/bandwidth_quota.txt; else echo 'Unknown'; fi", shell=True).decode('utf-8').strip()
+                if vps_quota == 'Unknown':
+                    isp = subprocess.check_output("curl -s -m 3 http://ip-api.com/line/?fields=isp 2>/dev/null || echo 'Unknown'", shell=True).decode('utf-8').strip()
+                    if any(x in isp for x in ['DigitalOcean', 'DO', 'Linode', 'Akamai', 'Vultr', 'Hetzner', 'Contabo', 'Oracle', 'Amazon', 'AWS', 'Google', 'GCP']):
+                        vps_quota = 'Limited'
+                    else:
+                        vps_quota = 'Unlimited'
+                if 'Unlimited' in vps_quota:
+                    kuota_gb = "0"
+            except:
+                pass
+
+            try:
+                exp_date = (datetime.now() + timedelta(days=int(hari))).strftime('%Y-%m-%d')
+            except:
+                exp_date = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+
+            os.system(f'useradd -e {exp_date} -m -s /bin/false -M {user}')
             os.system(f'echo "{user}:{pwd}" | chpasswd')
             
-            MSG = f"✅ AKUN SSH SUKSES DIBUAT\n━━━━━━━━━━━━━━━━━━\n👤 Username: {user}\n🔑 Password: {pwd}\n🌍 Host: {DOMAIN}\n⏳  Durasi: {hari} Hari\n━━━━━━━━━━━━━━━━━━\n🔌 Port Info:\n• TLS: 443, 8443\n• HTTP: 80, 8880, 2082\n• Dropbear: 109, 143\n• OpenSSH: 22, 2253\n• UDPGW: 7100\n• Squid: 8080\n━━━━━━━━━━━━━━━━━━\n📥 Payload WS:\nGET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\n━━━━━━━━━━━━━━━━━━"
+            # Setup IP Limit & Quota
+            os.system('mkdir -p /etc/premdigital/multilogin /etc/premdigital/user_quota')
+            os.system(f'echo "{ip_limit}" > /etc/premdigital/multilogin/{user}')
+            os.system(f'echo "{kuota_gb}" > /etc/premdigital/user_quota/{user}')
+            
+            kuota_label = f"{kuota_gb} GB" if str(kuota_gb) != "0" else "Unlimited"
+            
+            MSG = f"✅ AKUN SSH SUKSES DIBUAT\n━━━━━━━━━━━━━━━━━━\n👤 Username: {user}\n🔑 Password: {pwd}\n🌍 Host: {DOMAIN}\n⏳ Durasi: {hari} Hari\n📱 Max Login: {ip_limit} IP\n📦 Kuota Data: {kuota_label}\n━━━━━━━━━━━━━━━━━━\n🔌 Port Info:\n• TLS: 443, 8443\n• HTTP: 80, 8880, 2082\n• Dropbear: 109, 143\n• OpenSSH: 22, 2253\n• UDPGW: 7100\n• Squid: 8080\n━━━━━━━━━━━━━━━━━━\n📥 Payload WS:\nGET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\n━━━━━━━━━━━━━━━━━━"
             requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id": chat_id, "text": MSG})
         else:
-            requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage?chat_id={chat_id}&text=Format salah. Gunakan: /create user password hari")
+            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id": chat_id, "text": "Format salah.\n\nGunakan: /create <user> <pass> <hari> [ip_limit]\nContoh 1: /create tester 123 30\nContoh 2: /create vvip 123 30 1\n(Ket: 1 IP = 50GB, 2 IP = 70GB, 3 IP = 100GB, 5 IP = 150GB)"})
 
 while True:
     try:
@@ -786,9 +829,62 @@ while true; do
                 4) max_ip=5 ;;
                 *) max_ip=2 ;;
             esac
+
+            # Cek VPS Quota
+            vps_quota_type="Unlimited"
+            if [ -f "/etc/premdigital/bandwidth_quota.txt" ]; then
+                vps_quota_type=$(cat "/etc/premdigital/bandwidth_quota.txt" | tr -d '\r\n')
+            else
+                case "$ISP" in
+                    *DigitalOcean*|*DO*) vps_quota_type="1000 GB" ;;
+                    *Linode*|*Akamai*) vps_quota_type="1000 GB" ;;
+                    *Vultr*) vps_quota_type="1000 GB" ;;
+                    *Hetzner*) vps_quota_type="20 TB" ;;
+                    *Contabo*) vps_quota_type="32 TB" ;;
+                    *Oracle*) vps_quota_type="10 TB" ;;
+                    *Amazon*|*AWS*) vps_quota_type="100 GB" ;;
+                    *Google*|*GCP*) vps_quota_type="Metered" ;;
+                    *) vps_quota_type="Unlimited" ;;
+                esac
+            fi
+
+            if [[ "$vps_quota_type" == *"Unlimited"* ]]; then
+                quota_gb=0
+                quota_label="Unlimited (VPS Unmetered)"
+            else
+                echo -e "\nPilih Kuota Bandwidth Akun:"
+                echo -e " [1] Unlimited (Tanpa Batas Kuota)"
+                echo -e " [2] 10 GB"
+                echo -e " [3] 25 GB"
+                echo -e " [4] 50 GB"
+                echo -e " [5] 100 GB"
+                echo -e " [6] Custom (Ketik sendiri GB, misal: 15)"
+                read -p "Pilihan [1-6] (Default Unlimited): " quota_opt
+                case $quota_opt in
+                    1) quota_gb=0; quota_label="Unlimited" ;;
+                    2) quota_gb=10; quota_label="10 GB" ;;
+                    3) quota_gb=25; quota_label="25 GB" ;;
+                    4) quota_gb=50; quota_label="50 GB" ;;
+                    5) quota_gb=100; quota_label="100 GB" ;;
+                    6)
+                        read -p "Masukkan kuota (dalam GB angka saja): " custom_gb
+                        custom_gb=$(echo "$custom_gb" | tr -dc '0-9')
+                        [ -z "$custom_gb" ] && custom_gb=0
+                        quota_gb=$custom_gb
+                        if [ "$quota_gb" -gt 0 ]; then
+                            quota_label="${quota_gb} GB"
+                        else
+                            quota_label="Unlimited"
+                        fi
+                        ;;
+                    *) quota_gb=0; quota_label="Unlimited" ;;
+                esac
+            fi
             
             mkdir -p /etc/premdigital/multilogin
+            mkdir -p /etc/premdigital/user_quota
             echo "$max_ip" > "/etc/premdigital/multilogin/$user"
+            echo "$quota_gb" > "/etc/premdigital/user_quota/$user"
 
             exp=$(date -d "+$masaaktif days" +"%Y-%m-%d")
             useradd -e $exp -s /bin/false -M $user
@@ -802,6 +898,7 @@ while true; do
             echo -e "🌍 Host       : $DOMAIN"
             echo -e "⏳ Durasi     : $masaaktif Hari ($exp)"
             echo -e "📱 Max Login  : $max_ip IP / Device"
+            echo -e "📦 Kuota Data : $quota_label"
             echo -e "━━━━━━━━━━━━━━━━━━"
             echo -e "🔌 Port Info:"
             echo -e "• WebSocket TLS / SSL  : 443, 8443"
