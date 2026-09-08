@@ -1219,7 +1219,7 @@ while true; do
         4)
             clear
             echo -e "${Y}Mencoba menembak API di localhost (Port 5000)...${NC}"
-            API_KEY=$(grep "API_SECRET" /usr/local/bin/vps-api | cut -d '"' -f 2)
+            API_KEY=$(grep "^API_SECRET =" /usr/local/bin/vps-api | cut -d '"' -f 2)
             curl -X POST http://127.0.0.1:5000/api/create \
                  -H "Content-Type: application/json" \
                  -d '{"secret": "'"$API_KEY"'", "username": "testapi", "password": "123", "expired": "1"}'

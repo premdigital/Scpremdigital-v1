@@ -1,0 +1,2 @@
+API_SECRET = "PREMDIGITAL_RAHASIA_123"
+if data.get('secret') != API_SECRET:
