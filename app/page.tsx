@@ -1,308 +1,298 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Server, UserPlus, Lock, Key, Clock, ShieldCheck, CheckCircle2, XCircle, Loader2, Copy, Check } from 'lucide-react';
+import React, { useState } from "react";
+import { Moon, Menu, User, Lock, AlertTriangle, X, Shield, Zap } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-export default function Home() {
-  const [formData, setFormData] = useState({
-    host: '',
-    apiKey: '',
-    username: '',
-    password: '',
-    days: '30'
-  });
+export default function PremdigitalTunnelApp() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [billingTier, setBillingTier] = useState("free");
   
-  const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [createdAccount, setCreatedAccount] = useState<{
-    username: string;
-    password: string;
-    host: string;
-    days: string;
-  } | null>(null);
-  const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const getAccountFormatText = () => {
-    if (!createdAccount) return '';
-    return `✅ AKUN SSH SUKSES DIBUAT
-━━━━━━━━━━━━━━━━━━
-👤 Username: ${createdAccount.username}
-🔑 Password: ${createdAccount.password}
-🌍 Host: ${createdAccount.host}
-⏳  Durasi: ${createdAccount.days} Hari
-━━━━━━━━━━━━━━━━━━
-🔌 Port Info:
-• TLS: 443, 8443
-• HTTP: 80, 8080
-• SlowDNS: 53, 5300
-• SSH OHP: 9080
-• UDP Custom: 1-65535
-• UDPGW: 7100-7600
-━━━━━━━━━━━━━━━━━━
-📥 Payload WS:
-GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]
-━━━━━━━━━━━━━━━━━━`;
-  };
-
-  const handleCopy = () => {
-    const text = getAccountFormatText();
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const [isCreating, setIsCreating] = useState(false);
+  const [creationStep, setCreationStep] = useState(0); 
+  
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setResult(null);
-    setCreatedAccount(null);
-
-    try {
-      const response = await fetch('/api/ssh/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        setResult({ success: true, message: data.message });
-        setCreatedAccount({
-          username: formData.username,
-          password: formData.password,
-          host: formData.host,
-          days: formData.days
-        });
-        // Reset form for user/pass
-        setFormData(prev => ({ ...prev, username: '', password: '' }));
-      } else {
-        setResult({ success: false, error: data.error, message: data.details });
-      }
-    } catch (err: any) {
-      setResult({ success: false, error: 'Koneksi ke server API gagal!' });
-    } finally {
-      setLoading(false);
-    }
+    setIsCreating(true);
+    setCreationStep(1);
+    
+    // Simulate process
+    setTimeout(() => setCreationStep(2), 1500);
+    setTimeout(() => setCreationStep(3), 3000);
+    setTimeout(() => setCreationStep(4), 4500); 
+  };
+  
+  const closeError = () => {
+    setIsCreating(false);
+    setCreationStep(0);
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 py-12 px-4 sm:px-6 lg:px-8 font-sans selection:bg-cyan-500/30">
-      <div className="max-w-2xl mx-auto">
-        {/* Header Section */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center p-3 bg-cyan-500/10 rounded-full mb-4 ring-1 ring-cyan-500/20">
-            <ShieldCheck className="h-8 w-8 text-cyan-400" />
+    <div className="min-h-screen bg-[#0B0F19] text-slate-200 font-sans selection:bg-purple-500/30">
+      {/* Navbar */}
+      <nav className="flex items-center justify-between px-4 py-3 bg-[#111827] border-b border-slate-800/60 sticky top-0 z-10">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 overflow-hidden">
+            <img src="/banner.jpg" alt="Logo" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.querySelector('svg')?.classList.remove('hidden'); }} />
+            <Shield className="w-5 h-5 text-white hidden" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            PremDigital <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">VPN Panel</span>
-          </h1>
-          <p className="mt-3 text-slate-400">
-            Create and manage premium SSH/VPN accounts directly from the web.
+          <span className="text-lg font-bold text-white tracking-tight">PremDigital Tunnel</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="p-2 rounded-full hover:bg-slate-800 text-slate-400 transition-colors">
+            <Moon className="w-5 h-5" />
+          </button>
+          <button className="p-2 rounded-full hover:bg-slate-800 text-slate-400 transition-colors">
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="max-w-md mx-auto p-4 pt-6 pb-24">
+        <div className="mb-6 rounded-2xl overflow-hidden shadow-2xl shadow-indigo-500/10 border border-slate-800">
+          <img src="/banner.jpg" alt="PremDigital Tunnel Banner" className="w-full h-auto object-cover aspect-[21/9]" />
+        </div>
+
+        <div className="mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 text-indigo-400 text-sm font-medium mb-4 border border-indigo-500/20">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+            Free Ssh Tunnel Server Singapore
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2 leading-tight">Create Ssh Tunnel Account Singapore SG1 SSH</h1>
+          <p className="text-slate-400 text-sm">
+            Get instant access to a secure and unrestricted internet experience with our high-performance Ssh Tunnel server located in Singapore.
           </p>
         </div>
 
-        {/* Main Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden backdrop-blur-sm">
-          <div className="px-6 py-8 sm:p-10">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              
-              {/* Server Config Section */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-white flex items-center border-b border-slate-800 pb-2">
-                  <Server className="h-5 w-5 mr-2 text-slate-400" />
-                  Konfigurasi VPS (Admin)
-                </h3>
-                
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <form onSubmit={handleCreate} className="space-y-5">
+          {/* Username */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-300 ml-1">Username</label>
+            <div className="relative">
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter letters and numbers (5-12 characters)"
+                className="w-full bg-[#1A2234] border border-slate-700 rounded-xl py-3.5 pl-4 pr-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                minLength={5}
+                maxLength={12}
+              />
+              <User className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+            </div>
+          </div>
+
+          {/* Password */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-300 ml-1">Password</label>
+            <div className="relative">
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimum 5 characters for security"
+                className="w-full bg-[#1A2234] border border-slate-700 rounded-xl py-3.5 pl-4 pr-10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                minLength={5}
+              />
+              <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+            </div>
+          </div>
+
+          {/* Billing Tier */}
+          <div className="space-y-2 pt-2">
+            <label className="text-sm font-medium text-slate-300 ml-1">Billing Tier</label>
+            
+            <div className="space-y-2.5">
+              {/* Free Tier */}
+              <label className={`block relative border rounded-xl p-4 cursor-pointer transition-all duration-200 ${billingTier === 'free' ? 'bg-indigo-900/20 border-indigo-500' : 'bg-[#1A2234] border-slate-700 hover:border-slate-600'}`}>
+                <input type="radio" name="tier" value="free" checked={billingTier === 'free'} onChange={() => setBillingTier('free')} className="sr-only" />
+                <div className="flex justify-between items-center">
                   <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1">IP Address VPS</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Server className="h-4 w-4 text-slate-500" />
-                      </div>
-                      <input
-                        type="text"
-                        name="host"
-                        required
-                        value={formData.host}
-                        onChange={handleChange}
-                        placeholder="Contoh: 94.237.74.66"
-                        className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-600 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-colors sm:text-sm"
-                      />
-                    </div>
+                    <div className="font-semibold text-white">Free</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Limited access</div>
                   </div>
+                  <div className="font-medium text-white">Rp 0</div>
+                </div>
+              </label>
+
+              {/* 3 Days Premium */}
+              <label className={`block relative border rounded-xl p-4 cursor-pointer transition-all duration-200 ${billingTier === '3days' ? 'bg-indigo-900/20 border-indigo-500' : 'bg-[#1A2234] border-slate-700 hover:border-slate-600'}`}>
+                <input type="radio" name="tier" value="3days" checked={billingTier === '3days'} onChange={() => setBillingTier('3days')} className="sr-only" />
+                <div className="flex justify-between items-center">
                   <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1">API Secret (Key)</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Key className="h-4 w-4 text-slate-500" />
-                      </div>
-                      <input
-                        type="password"
-                        name="apiKey"
-                        required
-                        value={formData.apiKey}
-                        onChange={handleChange}
-                        placeholder="PREMDIGITAL_RAHASIA_123"
-                        className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-600 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-colors sm:text-sm"
-                      />
+                    <div className="font-semibold text-white">3 Days Premium</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Short term access</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-2 justify-end mb-0.5">
+                      <span className="text-xs text-slate-500 line-through">Rp 1.500</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">-50%</span>
                     </div>
+                    <div className="font-medium text-white">Rp 750</div>
                   </div>
                 </div>
-              </div>
+              </label>
 
-              {/* Account Details Section */}
-              <div className="space-y-4 pt-4">
-                <h3 className="text-lg font-medium text-white flex items-center border-b border-slate-800 pb-2">
-                  <UserPlus className="h-5 w-5 mr-2 text-slate-400" />
-                  Detail Akun Klien
-                </h3>
-                
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {/* 7 Days Premium */}
+              <label className={`block relative border rounded-xl p-4 cursor-pointer transition-all duration-200 ${billingTier === '7days' ? 'bg-indigo-900/20 border-indigo-500' : 'bg-[#1A2234] border-slate-700 hover:border-slate-600'}`}>
+                <input type="radio" name="tier" value="7days" checked={billingTier === '7days'} onChange={() => setBillingTier('7days')} className="sr-only" />
+                <div className="flex justify-between items-center">
                   <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1">Username Baru</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <UserPlus className="h-4 w-4 text-slate-500" />
-                      </div>
-                      <input
-                        type="text"
-                        name="username"
-                        required
-                        value={formData.username}
-                        onChange={handleChange}
-                        placeholder="vpn_client01"
-                        className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-600 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-colors sm:text-sm"
-                      />
-                    </div>
+                    <div className="font-semibold text-white">7 Days Premium</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Best for weekly</div>
                   </div>
-                  
+                  <div className="text-right">
+                    <div className="flex items-center gap-2 justify-end mb-0.5">
+                      <span className="text-xs text-slate-500 line-through">Rp 3.300</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">-50%</span>
+                    </div>
+                    <div className="font-medium text-white">Rp 1.650</div>
+                  </div>
+                </div>
+              </label>
+
+              {/* 30 Days Premium */}
+              <label className={`block relative border rounded-xl p-4 cursor-pointer transition-all duration-200 ${billingTier === '30days' ? 'bg-indigo-900/20 border-indigo-500' : 'bg-[#1A2234] border-slate-700 hover:border-slate-600'}`}>
+                <input type="radio" name="tier" value="30days" checked={billingTier === '30days'} onChange={() => setBillingTier('30days')} className="sr-only" />
+                <div className="flex justify-between items-center">
                   <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1">Password Akun</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Lock className="h-4 w-4 text-slate-500" />
-                      </div>
-                      <input
-                        type="text"
-                        name="password"
-                        required
-                        value={formData.password}
-                        onChange={handleChange}
-                        placeholder="rahasia123"
-                        className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder-slate-600 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-colors sm:text-sm"
-                      />
+                    <div className="font-semibold text-white">30 Days Premium</div>
+                    <div className="text-xs text-slate-400 mt-0.5">Full month access</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-2 justify-end mb-0.5">
+                      <span className="text-xs text-slate-500 line-through">Rp 12.500</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">-50%</span>
                     </div>
+                    <div className="font-medium text-white">Rp 6.250</div>
                   </div>
                 </div>
+              </label>
+            </div>
+          </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Masa Aktif (Expired)</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Clock className="h-4 w-4 text-slate-500" />
-                    </div>
-                    <select
-                      name="days"
-                      value={formData.days}
-                      onChange={handleChange}
-                      className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 transition-colors sm:text-sm appearance-none"
-                    >
-                      <option value="1">1 Hari (Trial)</option>
-                      <option value="3">3 Hari</option>
-                      <option value="7">7 Hari (1 Minggu)</option>
-                      <option value="30">30 Hari (1 Bulan)</option>
-                      <option value="60">60 Hari (2 Bulan)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
+          <div className="pt-4 pb-8">
+            <button
+              type="submit"
+              disabled={isCreating}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-70"
+            >
+              Create Ssh Tunnel Account
+            </button>
+          </div>
+        </form>
 
-              {/* Submit Button */}
-              <div className="pt-6">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="animate-spin -ml-1 mr-2 h-5 w-5" />
-                      Sedang Membuat Akun...
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="-ml-1 mr-2 h-5 w-5" />
-                      Create Premium Account
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-
-            {/* Notification Area */}
-            {result && (
-              <div className={`mt-6 rounded-lg p-4 border ${result.success ? 'bg-emerald-950/50 border-emerald-900' : 'bg-rose-950/50 border-rose-900'}`}>
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    {result.success ? (
-                      <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-rose-400" />
-                    )}
-                  </div>
-                  <div className="ml-3 flex-1">
-                    <h3 className={`text-sm font-medium ${result.success ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {result.success ? 'Berhasil!' : 'Gagal Error!'}
-                    </h3>
-                    <div className={`mt-1 text-sm ${result.success ? 'text-emerald-300/80' : 'text-rose-300/80'}`}>
-                      <p>{result.message || result.error}</p>
-                      
-                      {result.success && createdAccount && (
-                        <div className="mt-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Format Akun Siap Kirim</span>
-                            <button
-                              type="button"
-                              onClick={handleCopy}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/30 rounded text-xs transition"
-                            >
-                              {copied ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                  Tersalin!
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3.5 h-3.5" />
-                                  Salin Format
-                                </>
-                              )}
-                            </button>
-                          </div>
-                          <pre className="p-3 bg-slate-950 rounded border border-emerald-900/60 text-xs font-mono text-emerald-200 whitespace-pre-wrap select-all overflow-x-auto leading-relaxed">
-                            {getAccountFormatText()}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
+        {/* Promo Section */}
+        <div className="mt-8 border-t border-slate-800 pt-8">
+          <div className="bg-gradient-to-br from-indigo-900/40 to-[#1A2234] border border-indigo-500/20 rounded-2xl p-6">
+            <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center mb-4">
+              <Zap className="w-5 h-5 text-indigo-400" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">Unlock Premium Features</h3>
+            <p className="text-slate-400 text-sm leading-relaxed mb-4">
+              Get the most out of your Ssh Tunnel experience with our premium subscription plans. <span className="text-indigo-400 font-medium cursor-pointer">Upgrade today</span> and enjoy unlimited access to all features.
+            </p>
           </div>
         </div>
-        
-        <div className="mt-8 text-center text-xs text-slate-600">
-          &copy; {new Date().getFullYear()} PremDigital Web Panel. All rights reserved.
-        </div>
-      </div>
+      </main>
+
+      {/* Loading & Error Overlay */}
+      <AnimatePresence>
+        {isCreating && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-[#0B0F19]/95 backdrop-blur-sm flex flex-col items-center justify-center p-6"
+          >
+            {creationStep < 4 ? (
+              <div className="w-full max-w-sm flex flex-col items-center">
+                <div className="relative w-20 h-20 mb-8">
+                  <div className="absolute inset-0 rounded-full border-4 border-indigo-900/50"></div>
+                  <motion.div
+                    className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-indigo-500/20 animate-pulse"></div>
+                  </div>
+                </div>
+                
+                <h2 className="text-2xl font-bold text-white mb-2 text-center">Creating Your Account</h2>
+                <p className="text-slate-400 text-center text-sm mb-8">Please wait while we process your request...</p>
+                
+                <div className="w-full space-y-4 max-w-[250px]">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2.5 h-2.5 rounded-full ${creationStep >= 1 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`}></div>
+                    <span className={`text-sm ${creationStep >= 1 ? 'text-white' : 'text-slate-500'}`}>Validating credentials</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2.5 h-2.5 rounded-full ${creationStep >= 2 ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]' : 'bg-slate-700'}`}></div>
+                    <span className={`text-sm ${creationStep >= 2 ? 'text-white' : 'text-slate-500'}`}>Creating account on server</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2.5 h-2.5 rounded-full ${creationStep >= 3 ? 'bg-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'bg-slate-700'}`}></div>
+                    <span className={`text-sm ${creationStep >= 3 ? 'text-white' : 'text-slate-500'}`}>Configuring connection</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="w-full max-w-sm bg-[#1A2234] border border-rose-500/30 rounded-2xl overflow-hidden shadow-2xl"
+              >
+                <div className="bg-rose-500/10 p-6 flex flex-col items-center border-b border-rose-500/20">
+                  <div className="w-16 h-16 rounded-full bg-rose-500/20 flex items-center justify-center mb-4">
+                    <AlertTriangle className="w-8 h-8 text-rose-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-1">Error Details</h3>
+                </div>
+                <div className="p-6">
+                  <p className="text-slate-300 text-sm text-center leading-relaxed">
+                    Cannot connect to sg1.premdigitaltunnel.my.id:22.<br />
+                    Connection timed out.
+                  </p>
+                  <button
+                    onClick={closeError}
+                    className="mt-6 w-full bg-[#0B0F19] hover:bg-slate-800 border border-slate-700 text-white font-medium py-3 rounded-xl transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Error Simulation */}
+      <AnimatePresence>
+        {creationStep === 4 && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-96 bg-rose-500 text-white rounded-xl shadow-xl shadow-rose-500/20 overflow-hidden z-[60]"
+          >
+            <div className="px-4 py-3 flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+              <div className="flex-1">
+                <div className="font-bold text-sm">Error!</div>
+                <div className="text-xs text-rose-100">Upps! Something wrong</div>
+              </div>
+              <button onClick={closeError} className="p-1 hover:bg-rose-600 rounded-lg transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
