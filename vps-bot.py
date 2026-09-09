@@ -313,7 +313,8 @@ def process_callback(callback_query):
             
         edit_message_caption(chat_id, message_id, f"❌ <b>DEPOSIT DITOLAK</b>\n━━━━━━━━━━━━━━━━━━━━━━\nDeposit Rp {amount} dari User ID <code>{target_id}</code> telah Anda tolak.")
         send_message_with_keyboard(target_id, f"❌ <b>DEPOSIT DITOLAK</b>\n━━━━━━━━━━━━━━━━━━━━━━\nMaaf, pengajuan deposit Anda sebesar Rp {amount} <b>Ditolak oleh Admin</b> karena bukti transfer tidak valid. Silakan hubungi admin jika ini kesalahan.")
-# --- ADMIN MENU ---
+
+    # --- ADMIN MENU ---
     elif data == "back_to_admin":
         if user_id in USER_STATE: del USER_STATE[user_id]
         msg = get_admin_menu_text()
@@ -619,7 +620,8 @@ def process_callback(callback_query):
 
     elif data == "menu_coming_soon":
         requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={"callback_query_id": callback_query["id"], "text": "⚠️ Fitur ini sedang dalam tahap pengembangan.", "show_alert": True})
-        def process_photo(message_data):
+
+def process_photo(message_data):
     chat_id = message_data["chat"]["id"]
     first_name = message_data["chat"].get("first_name", "User")
     user_id = message_data["from"]["id"]
