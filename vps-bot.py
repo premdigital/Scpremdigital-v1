@@ -11,7 +11,7 @@ try:
 except:
     DOMAIN = "IP_VPS"
 
-# Set konfigurasi tambahan sesuai gambar
+# Set konfigurasi tambahan
 ADMIN_CONTACT = "t.me/T0M15"
 WEB_URL = "https://www.premdigital.web.id"
 VERSION = "v1.0 (PremDigital)"
@@ -41,14 +41,65 @@ def process_callback(callback_query):
 
     if data == "menu_ssh":
         msg = (
-            f"<b>🔑 BUAT AKUN SSH/OVPN/UDP</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"Untuk saat ini, pembuatan akun dilakukan dengan perintah manual.\n\n"
-            f"Ketik format berikut:\n"
-            f"<code>/create [username] [password] [hari] [limit_ip]</code>\n\n"
-            f"<b>Contoh:</b> <code>/create tester 123 30 2</code>"
+            f"📖 <b>DAFTAR SERVER SSH</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📁 <b>Server 1 :</b> 🇸🇬 SINGAPORE\n"
+            f"⚡ <b>Ping :</b> 30 ms 🟢\n"
+            f"🏢 <b>ISP :</b> DigitalOcean, LLC\n"
+            f"💵 <b>Harga per hari:</b> Rp200\n"
+            f"🗓 <b>Harga per 30 hari:</b> Rp6.000\n"
+            f"📊 <b>Kuota:</b> Unlimited\n"
+            f"📱 <b>Limit IP:</b> 1 Device\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📁 <b>Server 2 :</b> 🇮🇩 INDONESIA\n"
+            f"⚡ <b>Ping :</b> 34 ms 🟢\n"
+            f"🏢 <b>ISP :</b> PT Biznet Gio Nusantara\n"
+            f"💵 <b>Harga per hari:</b> Rp333\n"
+            f"🗓 <b>Harga per 30 hari:</b> Rp9.990\n"
+            f"📊 <b>Kuota:</b> Unlimited\n"
+            f"📱 <b>Limit IP:</b> 2 Device\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Pilih nomor server di bawah untuk melanjutkan order:</i>"
         )
-        send_message_with_keyboard(chat_id, msg)
+        
+        # Tombol angka berjejer ke samping, tombol kembali di bawahnya
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "1", "callback_data": "order_sg_1ip"},
+                    {"text": "2", "callback_data": "order_id_2ip"}
+                ],
+                [
+                    {"text": "🔙 Kembali", "callback_data": "back_to_main"}
+                ]
+            ]
+        }
+        send_message_with_keyboard(chat_id, msg, reply_markup=keyboard)
+        
+    elif data == "back_to_main":
+        # Mengirim ulang menu utama
+        process_message("/start", chat_id, "User", callback_query["from"]["id"])
+        
+    elif data.startswith("order_"):
+        # Logika ketika user menekan tombol angka (Server 1 atau 2)
+        server_code = data.split("_")[1].upper()
+        limit_ip = data.split("_")[2]
+        
+        msg = (
+            f"🛒 <b>ORDER DALAM PROSES</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Anda memilih Server <b>{server_code}</b> ({limit_ip}).\n\n"
+            f"Gunakan perintah manual untuk saat ini:\n"
+            f"<code>/create [username] [password] [hari] {limit_ip.replace('ip','')}</code>\n\n"
+            f"<i>*Sistem potong saldo sedang dalam pengembangan.</i>"
+        )
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "🔙 Kembali", "callback_data": "menu_ssh"}]
+            ]
+        }
+        send_message_with_keyboard(chat_id, msg, reply_markup=keyboard)
+
     elif data == "menu_coming_soon":
         send_message_with_keyboard(chat_id, "<i>⚠️ Fitur ini sedang dalam tahap pengembangan.</i>")
     elif data == "menu_status":
@@ -91,7 +142,6 @@ def process_message(text, chat_id, first_name, user_id):
             f"<i>Version {VERSION}</i>"
         )
         
-        # Susunan Tombol sesuai gambar
         keyboard = {
             "inline_keyboard": [
                 [
@@ -113,7 +163,7 @@ def process_message(text, chat_id, first_name, user_id):
         
         send_message_with_keyboard(chat_id, msg, reply_markup=keyboard)
 
-    # === MENU CREATE AKUN MANUAL (Tetap dipertahankan) ===
+    # === MENU CREATE AKUN MANUAL (Tetap dipertahankan untuk saat ini) ===
     elif text.startswith("/create"):
         parts = text.split()
         if len(parts) >= 4:
@@ -166,7 +216,7 @@ def process_message(text, chat_id, first_name, user_id):
             )
             send_message_with_keyboard(chat_id, MSG)
 
-# === SETUP TOMBOL MENU UTAMA (Tombol biru "Menu" di kiri bawah Telegram) ===
+# === SETUP TOMBOL MENU UTAMA ===
 def setup_bot_menu():
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/setMyCommands"
     commands = {
@@ -178,7 +228,7 @@ def setup_bot_menu():
     try: requests.post(url, json=commands)
     except: pass
 
-setup_bot_menu() # Jalankan sekali saat bot hidup
+setup_bot_menu()
 
 while True:
     try:
@@ -187,11 +237,9 @@ while True:
         for result in data.get("result", []):
             LAST_UPDATE_ID = result["update_id"] + 1
             
-            # Jika user menekan tombol (Callback Query)
             if "callback_query" in result:
                 process_callback(result["callback_query"])
             
-            # Jika user mengetik pesan biasa
             elif "message" in result:
                 chat_id = result["message"]["chat"]["id"]
                 text = result["message"].get("text", "")
