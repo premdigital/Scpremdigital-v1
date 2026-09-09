@@ -1233,11 +1233,11 @@ while true; do
             clear
             echo -e "${Y}Mencoba menembak API di localhost (Port 5000)...${NC}"
             API_KEY=$(grep "^API_SECRET =" /usr/local/bin/vps-api | cut -d '"' -f 2)
-            curl -X POST http://127.0.0.1:5000/api/create \
+            curl -s -X POST http://127.0.0.1:5000/api/create \
                  -H "Content-Type: application/json" \
-                 -d '{"secret": "'"$API_KEY"'", "username": "testapi", "password": "123", "expired": "1"}'
+                 -d '{"secret": "'"$API_KEY"'", "username": "testapi", "password": "123", "expired": "1"}' | jq .
             echo ""
-            echo -e "Jika muncul JSON success, berarti API BEKERJA NORMAL!"
+            echo -e "${G}Jika muncul JSON berformat di atas dengan tulisan 'success', berarti API BEKERJA NORMAL!${NC}"
             userdel -f testapi 2>/dev/null
             echo ""
             read -r -p "Tekan [Enter] untuk kembali ke menu service..." dummy
