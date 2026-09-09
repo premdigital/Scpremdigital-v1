@@ -43,12 +43,21 @@ while true; do
     fi
 done
 
-read -rp "Masa Aktif (Hari) : " masaaktif
-[ -z "$masaaktif" ] && masaaktif=30
+# Validasi Masa Aktif (Wajib Angka Positif)
+while true; do
+    read -rp "Masa Aktif (Hari, Default 30) : " -e masaaktif
+    [ -z "$masaaktif" ] && masaaktif=30
+    if [[ "$masaaktif" =~ ^[0-9]+$ ]] && [ "$masaaktif" -gt 0 ]; then
+        break
+    else
+        echo -e "\e[1;31mInput salah! Masa aktif harus berupa angka (contoh: 30).\e[0m"
+    fi
+done
 
 # Generate UUID & Tanggal Expired
 uuid=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())')
-exp=$(date -d "$masaaktif days" +"%Y-%m-%d" 2>/dev/null || date -v+${masaaktif}d +"%Y-%m-%d")
+exp=$(date -d "+$masaaktif days" +"%Y-%m-%d" 2>/dev/null || date -d "$masaaktif days" +"%Y-%m-%d" 2>/dev/null || date -v+${masaaktif}d +"%Y-%m-%d" 2>/dev/null)
+[ -z "$exp" ] && exp=$(date -d "+30 days" +"%Y-%m-%d" 2>/dev/null || date +"%Y-%m-%d")
 
 # Injeksi ke Config Xray menggunakan Python 3
 python3 - <<EOF

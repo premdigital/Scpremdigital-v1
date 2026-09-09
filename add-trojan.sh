@@ -29,9 +29,10 @@ echo -e "\e[1;36m━━━━━━━━━━━━━━━━━━━━━
 echo -e "\e[1;33m       MEMBUAT AKUN TROJAN (5 JALUR)\e[0m"
 echo -e "\e[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 
-# Validasi Username / Password
+# Validasi Username
 while true; do
-    read -rp "Username (Password Trojan) : " -e user
+    read -rp "Username : " -e user
+    user=$(echo "$user" | tr -d ' ')
     if [[ -z "$user" ]]; then
         echo -e "\e[1;31mUsername tidak boleh kosong!\e[0m"
         continue
@@ -43,10 +44,22 @@ while true; do
     fi
 done
 
-read -rp "Masa Aktif (Hari) : " masaaktif
-[ -z "$masaaktif" ] && masaaktif=30
+read -rp "Password Trojan (Tekan Enter jika sama dengan Username) : " -e pass
+[ -z "$pass" ] && pass="$user"
 
-exp=$(date -d "$masaaktif days" +"%Y-%m-%d" 2>/dev/null || date -v+${masaaktif}d +"%Y-%m-%d")
+# Validasi Masa Aktif (Wajib Angka Positif)
+while true; do
+    read -rp "Masa Aktif (Hari, Default 30) : " -e masaaktif
+    [ -z "$masaaktif" ] && masaaktif=30
+    if [[ "$masaaktif" =~ ^[0-9]+$ ]] && [ "$masaaktif" -gt 0 ]; then
+        break
+    else
+        echo -e "\e[1;31mInput salah! Masa aktif harus berupa angka (contoh: 30).\e[0m"
+    fi
+done
+
+exp=$(date -d "+$masaaktif days" +"%Y-%m-%d" 2>/dev/null || date -d "$masaaktif days" +"%Y-%m-%d" 2>/dev/null || date -v+${masaaktif}d +"%Y-%m-%d" 2>/dev/null)
+[ -z "$exp" ] && exp=$(date -d "+30 days" +"%Y-%m-%d" 2>/dev/null || date +"%Y-%m-%d")
 
 # Injeksi ke Config Xray menggunakan Python 3
 python3 - <<EOF
@@ -58,7 +71,7 @@ try:
         if ib.get("protocol") == "trojan":
             clients = ib.setdefault("settings", {}).setdefault("clients", [])
             clients.append({
-                "password": "$user",
+                "password": "$pass",
                 "email": "$user"
             })
     with open("$CONFIG_XRAY", "w") as f:
@@ -70,26 +83,26 @@ EOF
 systemctl restart xray > /dev/null 2>&1
 
 # Simpan riwayat user
-echo "$user | $user | $exp | trojan" >> /etc/premdigital/xray-users.db
+echo "$user | $pass | $exp | trojan" >> /etc/premdigital/xray-users.db
 
 # ==========================================
 # Generate 5 Link TROJAN (Format URI)
 # ==========================================
 
 # 1. WS TLS
-link_ws_tls="trojan://${user}@${domain}:443?path=/trojan&security=tls&host=${domain}&type=ws&sni=${domain}#${user}"
+link_ws_tls="trojan://${pass}@${domain}:443?path=/trojan&security=tls&host=${domain}&type=ws&sni=${domain}#${user}"
 
 # 2. WS Non-TLS
-link_ws_ntls="trojan://${user}@${domain}:80?path=/trojan&security=none&host=${domain}&type=ws#${user}"
+link_ws_ntls="trojan://${pass}@${domain}:80?path=/trojan&security=none&host=${domain}&type=ws#${user}"
 
 # 3. gRPC
-link_grpc="trojan://${user}@${domain}:443?mode=multi&security=tls&type=grpc&serviceName=trojan&sni=${domain}#${user}"
+link_grpc="trojan://${pass}@${domain}:443?mode=multi&security=tls&type=grpc&serviceName=trojan&sni=${domain}#${user}"
 
 # 4. HTTP Upgrade TLS
-link_up_tls="trojan://${user}@${domain}:443?path=/uptrojan&security=tls&host=${domain}&type=httpupgrade&sni=${domain}#${user}"
+link_up_tls="trojan://${pass}@${domain}:443?path=/uptrojan&security=tls&host=${domain}&type=httpupgrade&sni=${domain}#${user}"
 
 # 5. HTTP Upgrade Non-TLS
-link_up_ntls="trojan://${user}@${domain}:80?path=/uptrojan&security=none&host=${domain}&type=httpupgrade#${user}"
+link_up_ntls="trojan://${pass}@${domain}:80?path=/uptrojan&security=none&host=${domain}&type=httpupgrade#${user}"
 
 # ==========================================
 # Output Hasil di Terminal
@@ -98,10 +111,10 @@ clear
 echo -e "\e[1;32m✅ SUKSES CREATE AKUN TROJAN\e[0m"
 echo -e "\e[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo -e "👤 Username     : \e[1;33m${user}\e[0m"
-echo -e "🔑 Password     : \e[1;37m${user}\e[0m"
+echo -e "🔑 Password     : \e[1;37m${pass}\e[0m"
 echo -e "🌍 Host / SNI   : \e[1;37m${domain}\e[0m"
 echo -e "⏳ Masa Aktif   : \e[1;37m${masaaktif} Hari\e[0m"
-echo -e "📅 Expired Pada : \e[1;31m${exp}\e[0m"
+echo -e "📅 Expired Pada : \e[1;32m${exp}\e[0m"
 echo -e "\e[1;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[0m"
 echo -e "🔒 \e[1;32m1. WS TLS (Port 443)\e[0m"
 echo -e "${link_ws_tls}"

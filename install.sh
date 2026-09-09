@@ -22,6 +22,12 @@ if [[ "$1" == "--update-menu" ]]; then
         bash /usr/local/bin/setup-xray
     fi
 
+    # Perbaiki jika ada entri dengan tanggal expired kosong di database xray-users.db
+    if [ -f /etc/premdigital/xray-users.db ]; then
+        default_exp=$(date -d "+30 days" +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d)
+        sed -i -E "s/ \|  \| / | ${default_exp} | /g" /etc/premdigital/xray-users.db 2>/dev/null
+    fi
+
     rm -f /tmp/temp-install.sh
     echo -e "\e[32mMenu & Modul Xray berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
     exit 0
@@ -802,7 +808,15 @@ while true; do
                 continue
             fi
             read -p "Password: " pass
-            read -p "Berapa Hari: " masaaktif
+            while true; do
+                read -p "Berapa Hari (Default 30): " masaaktif
+                [ -z "$masaaktif" ] && masaaktif=30
+                if [[ "$masaaktif" =~ ^[0-9]+$ ]] && [ "$masaaktif" -gt 0 ]; then
+                    break
+                else
+                    echo -e "${R}Input salah! Masa aktif harus berupa angka (contoh: 30).${NC}"
+                fi
+            done
             
             echo -e "\nPilih Batas Multi-Login (Max IP):"
             echo -e " [1] 1 IP (Max 1 Device)"
@@ -1278,7 +1292,7 @@ done
 # Auto-delete Expired Xray Users
 if [ -f /etc/premdigital/xray-users.db ] && [ -f /etc/xray/config.json ]; then
     while IFS=" | " read -r xuser xuuid xexp xproto; do
-        if [[ -n "$xuser" && "$xexp" < "$hariini" ]]; then
+        if [[ -n "$xuser" && -n "$xexp" && "$xexp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && "$xexp" < "$hariini" ]]; then
             python3 - <<EOF
 import json
 try:
