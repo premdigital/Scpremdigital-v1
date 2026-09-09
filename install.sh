@@ -5,7 +5,12 @@ if [[ "$1" == "--update-menu" ]]; then
     wget -qO /tmp/temp-install.sh https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/install.sh
     awk '/^cat > \/usr\/bin\/menu << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu
     awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
-    chmod +x /usr/bin/menu /usr/bin/menu-service
+    awk '/^cat > \/usr\/bin\/menu-backup << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-backup
+    chmod +x /usr/bin/menu /usr/bin/menu-service /usr/bin/menu-backup 2>/dev/null
+    ln -sf /usr/bin/menu-backup /usr/bin/backup-vps 2>/dev/null
+    ln -sf /usr/bin/menu-backup /usr/bin/restore-vps 2>/dev/null
+    grep -qxF "alias backup='/usr/bin/backup-vps'" ~/.bashrc || echo "alias backup='/usr/bin/backup-vps'" >> ~/.bashrc
+    grep -qxF "alias restore='/usr/bin/restore-vps'" ~/.bashrc || echo "alias restore='/usr/bin/restore-vps'" >> ~/.bashrc
     
     # Download modul xray setup, add akun, del akun, & list akun
     wget -qO /usr/local/bin/setup-xray https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/setup-xray.sh
@@ -1024,9 +1029,10 @@ while true; do
     echo -e " [10] Cek / Kelola Auto-Kill Multi-Login"
     echo -e " [11] Service Menu API & Bot"
     echo -e " [12] Pengaturan Banner SSH"
+    echo -e " [13] Backup & Restore Data VPS"
     echo -e " [0] Keluar"
     echo -e "${C}======================================${NC}"
-    read -p " Pilih Opsi [0-12]: " opt
+    read -p " Pilih Opsi [0-13]: " opt
     case $opt in
         1)
             clear
@@ -1486,6 +1492,9 @@ END_MOTD
         11)
             menu-service
             ;;
+        13)
+            menu-backup
+            ;;
         0)
             clear
             exit 0
@@ -1573,6 +1582,528 @@ while true; do
 done
 END
 chmod +x /usr/bin/menu-service
+
+# 13.1 CLI Menu Backup & Restore
+cat > /usr/bin/menu-backup << 'END'
+#!/bin/bash
+Y="\e[33m"
+C="\e[36m"
+R="\e[31m"
+G="\e[32m"
+NC="\e[0m"
+
+BACKUP_DIR="/root/backup"
+mkdir -p "$BACKUP_DIR"
+
+do_backup() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}        PROSES BACKUP DATA VPS        ${NC}"
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}Mengumpulkan data konfigurasi, akun & database...${NC}"
+    
+    local IP
+    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    local IP_CLEAN
+    IP_CLEAN=$(echo "$IP" | tr '.' '-')
+    local NOW
+    NOW=$(date +'%Y-%m-%d-%H%M%S')
+    local TEMP="/root/backup/tmp_bck_$$"
+    mkdir -p "$TEMP"
+
+    # 1. Konfigurasi Xray & Sertifikat
+    if [ -d /etc/xray ]; then
+        mkdir -p "$TEMP/xray"
+        cp -rf /etc/xray/* "$TEMP/xray/" 2>/dev/null
+    fi
+
+    # 2. Domain & Banner
+    [ -f /etc/vps-domain.txt ] && cp -f /etc/vps-domain.txt "$TEMP/"
+    [ -f /etc/issue.net ] && cp -f /etc/issue.net "$TEMP/"
+    [ -f /etc/issue ] && cp -f /etc/issue "$TEMP/"
+
+    # 3. Stunnel & PremDigital Configs
+    if [ -d /etc/stunnel ]; then
+        mkdir -p "$TEMP/stunnel"
+        cp -rf /etc/stunnel/* "$TEMP/stunnel/" 2>/dev/null
+    fi
+    if [ -d /etc/premdigital ]; then
+        mkdir -p "$TEMP/premdigital"
+        cp -rf /etc/premdigital/* "$TEMP/premdigital/" 2>/dev/null
+    fi
+
+    # 4. User Accounts (SSH & Dropbear)
+    awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd > "$TEMP/vpn_users.list"
+    awk -F: '($3>=1000)&&($1!="nobody"){print $0}' /etc/passwd > "$TEMP/passwd.bak"
+    touch "$TEMP/shadow.bak" "$TEMP/group.bak" "$TEMP/user_exp.txt"
+    while IFS= read -r u; do
+        [ -z "$u" ] && continue
+        grep "^$u:" /etc/shadow >> "$TEMP/shadow.bak" 2>/dev/null
+        grep "^$u:" /etc/group >> "$TEMP/group.bak" 2>/dev/null
+        exp=$(chage -l "$u" 2>/dev/null | grep "Account expires" | awk -F": " '{print $2}')
+        echo "$u:$exp" >> "$TEMP/user_exp.txt"
+    done < "$TEMP/vpn_users.list"
+
+    # 5. API Secret & Telegram Bot Token
+    [ -f /usr/local/bin/vps-api ] && grep "^API_SECRET =" /usr/local/bin/vps-api > "$TEMP/api_secret.txt" 2>/dev/null
+    [ -f /usr/local/bin/vps-bot ] && grep "^BOT_TOKEN =" /usr/local/bin/vps-bot > "$TEMP/bot_token.txt" 2>/dev/null
+
+    # 6. Crontab
+    [ -f /var/spool/cron/crontabs/root ] && cp -f /var/spool/cron/crontabs/root "$TEMP/cron_root" 2>/dev/null
+
+    local BFILE="$BACKUP_DIR/backup-${IP_CLEAN}-${NOW}.tar.gz"
+    tar -czf "$BFILE" -C "$TEMP" .
+    rm -rf "$TEMP"
+
+    if [ ! -f "$BFILE" ]; then
+        echo -e "${R}Gagal membuat file backup!${NC}"
+        sleep 2
+        return
+    fi
+
+    local FSIZE
+    FSIZE=$(du -h "$BFILE" 2>/dev/null | awk '{print $1}')
+
+    echo ""
+    echo -e "${G}======================================${NC}"
+    echo -e "${G}         BACKUP BERHASIL DIBUAT       ${NC}"
+    echo -e "${G}======================================${NC}"
+    echo -e " Lokasi File : ${Y}$BFILE${NC}"
+    echo -e " Ukuran File : ${G}$FSIZE${NC}"
+    echo -e " Waktu Dibuat: $(date '+%d-%m-%Y %H:%M:%S')"
+    echo -e " Domain VPS  : $(cat /etc/vps-domain.txt 2>/dev/null || echo "$IP")"
+    echo -e "--------------------------------------"
+    
+    read -p " Ingin upload & buat link download online? [y/N]: " up_opt
+    if [[ "$up_opt" =~ ^[yY]$ ]]; then
+        echo -e "${Y}Mengupload ke cloud temporary hosting...${NC}"
+        local dlink=""
+        dlink=$(curl -s -F "file=@$BFILE" https://file.io 2>/dev/null | grep -oP '"link":\s*"\K[^"]+' || true)
+        if [ -z "$dlink" ]; then
+            dlink=$(curl -s -F "file=@$BFILE" https://0x0.st 2>/dev/null || true)
+        fi
+        if [ -n "$dlink" ]; then
+            echo ""
+            echo -e "${G}Link Download Backup Online:${NC}"
+            echo -e "${Y}$dlink${NC}"
+            echo -e "${C}Simpan link ini untuk restore di VPS lain.${NC}"
+        else
+            echo -e "${R}Gagal upload online. File tetap tersimpan di $BFILE${NC}"
+        fi
+    fi
+    echo -e "${C}======================================${NC}"
+    echo ""
+    read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+}
+
+do_restore_core() {
+    local target_archive="$1"
+    if [ ! -f "$target_archive" ]; then
+        echo -e "${R}File arsip backup tidak ditemukan!${NC}"
+        sleep 2
+        return 1
+    fi
+
+    if ! tar -tzf "$target_archive" >/dev/null 2>&1; then
+        echo -e "${R}File arsip backup rusak atau format tidak valid (.tar.gz)!${NC}"
+        sleep 2
+        return 1
+    fi
+
+    local RTMP="/root/backup/tmp_restore_$$"
+    mkdir -p "$RTMP"
+    tar -xzf "$target_archive" -C "$RTMP" 2>/dev/null
+
+    echo -e "${Y}[1/5] Memulihkan konfigurasi Xray & Sertifikat...${NC}"
+    if [ -d "$RTMP/xray" ]; then
+        mkdir -p /etc/xray
+        cp -rf "$RTMP/xray"/* /etc/xray/ 2>/dev/null
+    fi
+
+    echo -e "${Y}[2/5] Memulihkan data Domain, Banner & Database...${NC}"
+    [ -f "$RTMP/vps-domain.txt" ] && cp -f "$RTMP/vps-domain.txt" /etc/vps-domain.txt
+    if [ -f "$RTMP/issue.net" ]; then
+        cp -f "$RTMP/issue.net" /etc/issue.net
+        cp -f "$RTMP/issue.net" /etc/issue 2>/dev/null
+    fi
+    [ -d "$RTMP/stunnel" ] && cp -rf "$RTMP/stunnel"/* /etc/stunnel/ 2>/dev/null
+    [ -d "$RTMP/premdigital" ] && cp -rf "$RTMP/premdigital"/* /etc/premdigital/ 2>/dev/null
+
+    echo -e "${Y}[3/5] Memulihkan akun SSH, Dropbear & masa aktif...${NC}"
+    local count_ssh=0
+    if [ -f "$RTMP/vpn_users.list" ] && [ -f "$RTMP/passwd.bak" ]; then
+        while IFS= read -r u; do
+            [ -z "$u" ] && continue
+            count_ssh=$((count_ssh + 1))
+            if id "$u" &>/dev/null; then
+                sh_line=$(grep "^$u:" "$RTMP/shadow.bak" 2>/dev/null)
+                [ -n "$sh_line" ] && sed -i "s|^$u:.*|$sh_line|" /etc/shadow 2>/dev/null
+            else
+                grep "^$u:" "$RTMP/passwd.bak" >> /etc/passwd 2>/dev/null
+                grep "^$u:" "$RTMP/shadow.bak" >> /etc/shadow 2>/dev/null
+                grep "^$u:" "$RTMP/group.bak" >> /etc/group 2>/dev/null
+                mkdir -p "/home/$u" 2>/dev/null
+                chown -R "$u:$u" "/home/$u" 2>/dev/null
+            fi
+            if [ -f "$RTMP/user_exp.txt" ]; then
+                uexp=$(grep "^$u:" "$RTMP/user_exp.txt" | cut -d: -f2)
+                if [ -n "$uexp" ] && [ "$uexp" != "never" ]; then
+                    chage -E "$uexp" "$u" 2>/dev/null
+                fi
+            fi
+        done < "$RTMP/vpn_users.list"
+    fi
+
+    echo -e "${Y}[4/5] Memulihkan kredensial API & Bot Telegram...${NC}"
+    if [ -f "$RTMP/api_secret.txt" ] && [ -f /usr/local/bin/vps-api ]; then
+        sec=$(grep -oP 'API_SECRET = "\K[^"]+' "$RTMP/api_secret.txt")
+        [ -n "$sec" ] && sed -i "s/API_SECRET = \".*\"/API_SECRET = \"$sec\"/g" /usr/local/bin/vps-api
+    fi
+    if [ -f "$RTMP/bot_token.txt" ] && [ -f /usr/local/bin/vps-bot ]; then
+        tok=$(grep -oP 'BOT_TOKEN = "\K[^"]+' "$RTMP/bot_token.txt")
+        [ -n "$tok" ] && sed -i "s/BOT_TOKEN = \".*\"/BOT_TOKEN = \"$tok\"/g" /usr/local/bin/vps-bot
+    fi
+    [ -f "$RTMP/cron_root" ] && crontab "$RTMP/cron_root" 2>/dev/null
+
+    rm -rf "$RTMP"
+
+    echo -e "${Y}[5/5] Merestart seluruh service tunneling...${NC}"
+    systemctl restart ws-proxy 2>/dev/null
+    systemctl restart xray 2>/dev/null
+    fuser -k 8443/tcp 2>/dev/null || true
+    systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
+    systemctl restart dropbear 2>/dev/null
+    systemctl restart badvpn-udpgw 2>/dev/null
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    systemctl restart squid 2>/dev/null
+    systemctl restart vps-api 2>/dev/null
+    systemctl restart vps-bot 2>/dev/null
+
+    echo ""
+    echo -e "${G}======================================${NC}"
+    echo -e "${G}       RESTORE DATA BERHASIL!         ${NC}"
+    echo -e "${G}======================================${NC}"
+    echo -e " Akun SSH Dipulihkan : ${Y}$count_ssh Akun${NC}"
+    echo -e " Status Service Xray : ${G}$(systemctl is-active xray 2>/dev/null || echo 'OK')${NC}"
+    echo -e " Domain VPS          : ${Y}$(cat /etc/vps-domain.txt 2>/dev/null || echo '-')${NC}"
+    echo -e "${G}======================================${NC}"
+    echo ""
+    read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+}
+
+do_restore_local() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}     RESTORE DARI FILE LOKAL VPS      ${NC}"
+    echo -e "${C}======================================${NC}"
+    
+    local files=($(ls -1t "$BACKUP_DIR"/backup-*.tar.gz 2>/dev/null))
+    if [ ${#files[@]} -eq 0 ]; then
+        echo -e "${R}Tidak ada file backup ditemukan di $BACKUP_DIR${NC}"
+        echo ""
+        read -r -p "Tekan [Enter] untuk kembali..." dummy
+        return
+    fi
+
+    echo -e "Pilih file backup yang ingin dipulihkan:"
+    local i=1
+    for f in "${files[@]}"; do
+        local fname
+        fname=$(basename "$f")
+        local fsz
+        fsz=$(du -h "$f" 2>/dev/null | awk '{print $1}')
+        local fdate
+        fdate=$(date -r "$f" '+%d-%m-%Y %H:%M' 2>/dev/null)
+        echo -e " [$i] $fname (${G}$fsz${NC} - $fdate)"
+        i=$((i + 1))
+    done
+    echo -e " [0] Batal"
+    echo -e "${C}======================================${NC}"
+    read -p " Pilih Nomor File [0-$((i - 1))]: " sel
+    if [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" -ge 1 ] && [ "$sel" -lt "$i" ]; then
+        local chosen="${files[$((sel - 1))]}"
+        echo -e "\n${Y}Memulihkan dari file: $(basename "$chosen")...${NC}"
+        do_restore_core "$chosen"
+    else
+        echo -e "${Y}Dibatalkan.${NC}"
+        sleep 1
+    fi
+}
+
+do_restore_url() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}      RESTORE DARI LINK / URL ONLINE  ${NC}"
+    echo -e "${C}======================================${NC}"
+    echo -e "Masukkan link unduh file backup (.tar.gz):"
+    echo -e "(Contoh: https://file.io/xyz atau direct raw link)"
+    echo -e "--------------------------------------"
+    read -p " Link URL: " r_url
+    if [ -z "$r_url" ]; then
+        echo -e "${R}Link tidak boleh kosong!${NC}"
+        sleep 1.5
+        return
+    fi
+
+    echo -e "${Y}Mengunduh arsip backup dari URL...${NC}"
+    local dest="$BACKUP_DIR/downloaded_restore_$$.tar.gz"
+    curl -sL "$r_url" -o "$dest" 2>/dev/null || wget -qO "$dest" "$r_url" 2>/dev/null
+
+    if [ ! -s "$dest" ]; then
+        echo -e "${R}Gagal mengunduh file dari link tersebut atau file kosong!${NC}"
+        rm -f "$dest" 2>/dev/null
+        sleep 2
+        return
+    fi
+
+    do_restore_core "$dest"
+    rm -f "$dest" 2>/dev/null
+}
+
+do_send_telegram() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}     KIRIM FILE BACKUP KE TELEGRAM    ${NC}"
+    echo -e "${C}======================================${NC}"
+
+    local bot_token=""
+    if [ -f /usr/local/bin/vps-bot ]; then
+        bot_token=$(grep "^BOT_TOKEN =" /usr/local/bin/vps-bot | cut -d '"' -f 2)
+    fi
+    if [ -z "$bot_token" ] || [ "$bot_token" == "ISI_TOKEN_BOT_DISINI" ]; then
+        read -p " Masukkan Bot Token Telegram: " bot_token
+    fi
+
+    if [ -z "$bot_token" ] || [ "$bot_token" == "ISI_TOKEN_BOT_DISINI" ]; then
+        echo -e "${R}Bot token tidak valid!${NC}"
+        sleep 1.5
+        return
+    fi
+
+    local chat_id=""
+    [ -f /etc/premdigital/telegram_chat_id.txt ] && chat_id=$(cat /etc/premdigital/telegram_chat_id.txt | tr -d '\r\n')
+    if [ -z "$chat_id" ]; then
+        read -p " Masukkan Telegram Chat ID Anda: " chat_id
+        if [ -n "$chat_id" ]; then
+            mkdir -p /etc/premdigital
+            echo "$chat_id" > /etc/premdigital/telegram_chat_id.txt
+        fi
+    else
+        echo -e " Chat ID tersimpan: ${G}$chat_id${NC}"
+        read -p " Gunakan Chat ID ini? [Y/n]: " use_cid
+        if [[ "$use_cid" =~ ^[nN]$ ]]; then
+            read -p " Masukkan Chat ID Baru: " chat_id
+            echo "$chat_id" > /etc/premdigital/telegram_chat_id.txt
+        fi
+    fi
+
+    if [ -z "$chat_id" ]; then
+        echo -e "${R}Chat ID tidak boleh kosong!${NC}"
+        sleep 1.5
+        return
+    fi
+
+    local latest_file
+    latest_file=$(ls -1t "$BACKUP_DIR"/backup-*.tar.gz 2>/dev/null | head -n 1)
+    if [ -z "$latest_file" ] || [ ! -f "$latest_file" ]; then
+        echo -e "${Y}Belum ada file backup, membuat backup baru sekarang...${NC}"
+        local IP
+        IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
+        local IP_CLEAN
+        IP_CLEAN=$(echo "$IP" | tr '.' '-')
+        local NOW
+        NOW=$(date +'%Y-%m-%d-%H%M%S')
+        local TEMP="/root/backup/tmp_bck_$$"
+        mkdir -p "$TEMP"
+        [ -d /etc/xray ] && cp -rf /etc/xray "$TEMP/" 2>/dev/null
+        [ -f /etc/vps-domain.txt ] && cp -f /etc/vps-domain.txt "$TEMP/"
+        [ -f /etc/issue.net ] && cp -f /etc/issue.net "$TEMP/"
+        [ -d /etc/stunnel ] && cp -rf /etc/stunnel "$TEMP/" 2>/dev/null
+        [ -d /etc/premdigital ] && cp -rf /etc/premdigital "$TEMP/" 2>/dev/null
+        awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd > "$TEMP/vpn_users.list"
+        awk -F: '($3>=1000)&&($1!="nobody"){print $0}' /etc/passwd > "$TEMP/passwd.bak"
+        while IFS= read -r u; do
+            [ -n "$u" ] && grep "^$u:" /etc/shadow >> "$TEMP/shadow.bak" 2>/dev/null
+            [ -n "$u" ] && grep "^$u:" /etc/group >> "$TEMP/group.bak" 2>/dev/null
+        done < "$TEMP/vpn_users.list"
+        latest_file="$BACKUP_DIR/backup-${IP_CLEAN}-${NOW}.tar.gz"
+        tar -czf "$latest_file" -C "$TEMP" .
+        rm -rf "$TEMP"
+    fi
+
+    echo -e "${Y}Mengirim $(basename "$latest_file") ke Telegram...${NC}"
+    local caption="Backup VPS $(cat /etc/vps-domain.txt 2>/dev/null || echo 'PremDigital') - $(date '+%d-%m-%Y %H:%M:%S')"
+    local res
+    res=$(curl -s -F chat_id="$chat_id" -F document=@"$latest_file" -F caption="$caption" "https://api.telegram.org/bot${bot_token}/sendDocument")
+
+    if echo "$res" | grep -q '"ok":true'; then
+        echo -e "${G}SUKSES! File backup berhasil terkirim langsung ke Telegram Anda!${NC}"
+    else
+        echo -e "${R}Gagal mengirim file ke Telegram!${NC}"
+        echo -e "Detail response: $res"
+    fi
+    echo ""
+    read -r -p "Tekan [Enter] untuk kembali..." dummy
+}
+
+do_manage_backups() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}     DAFTAR FILE BACKUP DI VPS        ${NC}"
+    echo -e "${C}======================================${NC}"
+    local files=($(ls -1t "$BACKUP_DIR"/backup-*.tar.gz 2>/dev/null))
+    if [ ${#files[@]} -eq 0 ]; then
+        echo -e "Tidak ada file backup tersimpan di $BACKUP_DIR"
+        echo ""
+        read -r -p "Tekan [Enter] untuk kembali..." dummy
+        return
+    fi
+
+    local i=1
+    for f in "${files[@]}"; do
+        local fname
+        fname=$(basename "$f")
+        local fsz
+        fsz=$(du -h "$f" 2>/dev/null | awk '{print $1}')
+        local fdate
+        fdate=$(date -r "$f" '+%d-%m-%Y %H:%M:%S' 2>/dev/null)
+        echo -e " [$i] $fname (${G}$fsz${NC} | $fdate)"
+        i=$((i + 1))
+    done
+    echo -e "--------------------------------------"
+    echo -e " [D] Hapus Satu File Tertentu"
+    echo -e " [C] Bersihkan / Hapus SEMUA Backup Lama"
+    echo -e " [0] Kembali"
+    echo -e "${C}======================================${NC}"
+    read -p " Pilihan: " m_opt
+    case "$m_opt" in
+        [dD])
+            read -p " Masukkan nomor file yang ingin dihapus [1-$((i - 1))]: " del_num
+            if [[ "$del_num" =~ ^[0-9]+$ ]] && [ "$del_num" -ge 1 ] && [ "$del_num" -lt "$i" ]; then
+                rm -f "${files[$((del_num - 1))]}"
+                echo -e "${G}File backup berhasil dihapus!${NC}"
+                sleep 1.5
+            fi
+            ;;
+        [cC])
+            read -p " Yakin ingin menghapus SEMUA file backup lokal? [y/N]: " cf
+            if [[ "$cf" =~ ^[yY]$ ]]; then
+                rm -f "$BACKUP_DIR"/backup-*.tar.gz 2>/dev/null
+                echo -e "${G}Semua file backup telah dihapus!${NC}"
+                sleep 1.5
+            fi
+            ;;
+        *)
+            ;;
+    esac
+}
+
+do_auto_backup_cron() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}      AUTO-BACKUP OTOMATIS (CRON)     ${NC}"
+    echo -e "${C}======================================${NC}"
+    local is_active="NONAKTIF"
+    crontab -l 2>/dev/null | grep -q "menu-backup --cron" && is_active="${G}AKTIF (Setiap 00:00 Tengah Malam)${NC}"
+
+    echo -e "Status Auto-Backup  : $is_active"
+    echo -e "Jadwal Eksekusi     : Setiap Hari Pukul 00:00 WIB/UTC"
+    echo -e "Pembersihan Otomatis: Menyimpan 7 hari terakhir (rotasi)"
+    echo -e "--------------------------------------"
+    echo -e " [1] Aktifkan Auto-Backup Harian"
+    echo -e " [2] Nonaktifkan Auto-Backup Harian"
+    echo -e " [0] Kembali"
+    echo -e "${C}======================================${NC}"
+    read -p " Pilih Opsi [0-2]: " a_opt
+    case $a_opt in
+        1)
+            (crontab -l 2>/dev/null | grep -v "menu-backup --cron"; echo "0 0 * * * /usr/bin/menu-backup --cron >/dev/null 2>&1") | crontab -
+            echo -e "${G}Auto-Backup harian berhasil diaktifkan!${NC}"
+            sleep 1.5
+            ;;
+        2)
+            (crontab -l 2>/dev/null | grep -v "menu-backup --cron") | crontab -
+            echo -e "${G}Auto-Backup harian berhasil dinonaktifkan!${NC}"
+            sleep 1.5
+            ;;
+        *)
+            ;;
+    esac
+}
+
+# Standalone execution checks
+if [[ "$(basename "$0")" == "backup-vps" ]] || [[ "$1" == "--backup" ]]; then
+    do_backup
+    exit 0
+fi
+
+if [[ "$(basename "$0")" == "restore-vps" ]] || [[ "$1" == "--restore" ]]; then
+    do_restore_local
+    exit 0
+fi
+
+if [[ "$1" == "--cron" ]]; then
+    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
+    IP_CLEAN=$(echo "$IP" | tr '.' '-')
+    NOW=$(date +'%Y-%m-%d-%H%M%S')
+    TEMP="/root/backup/tmp_bck_cron_$$"
+    mkdir -p "$TEMP"
+    [ -d /etc/xray ] && cp -rf /etc/xray "$TEMP/" 2>/dev/null
+    [ -f /etc/vps-domain.txt ] && cp -f /etc/vps-domain.txt "$TEMP/"
+    [ -f /etc/issue.net ] && cp -f /etc/issue.net "$TEMP/"
+    [ -d /etc/stunnel ] && cp -rf /etc/stunnel "$TEMP/" 2>/dev/null
+    [ -d /etc/premdigital ] && cp -rf /etc/premdigital "$TEMP/" 2>/dev/null
+    awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd > "$TEMP/vpn_users.list"
+    awk -F: '($3>=1000)&&($1!="nobody"){print $0}' /etc/passwd > "$TEMP/passwd.bak"
+    while IFS= read -r u; do
+        [ -n "$u" ] && grep "^$u:" /etc/shadow >> "$TEMP/shadow.bak" 2>/dev/null
+        [ -n "$u" ] && grep "^$u:" /etc/group >> "$TEMP/group.bak" 2>/dev/null
+    done < "$TEMP/vpn_users.list"
+    BFILE="$BACKUP_DIR/backup-${IP_CLEAN}-${NOW}.tar.gz"
+    tar -czf "$BFILE" -C "$TEMP" .
+    rm -rf "$TEMP"
+
+    if [ -f /etc/premdigital/telegram_chat_id.txt ] && [ -f /usr/local/bin/vps-bot ]; then
+        cid=$(cat /etc/premdigital/telegram_chat_id.txt | tr -d '\r\n')
+        tok=$(grep "^BOT_TOKEN =" /usr/local/bin/vps-bot | cut -d '"' -f 2)
+        if [ -n "$cid" ] && [ -n "$tok" ] && [ "$tok" != "ISI_TOKEN_BOT_DISINI" ]; then
+            curl -s -F chat_id="$cid" -F document=@"$BFILE" -F caption="Auto-Backup VPS $(cat /etc/vps-domain.txt 2>/dev/null || echo $IP) - $(date '+%d-%m-%Y %H:%M')" "https://api.telegram.org/bot${tok}/sendDocument" >/dev/null 2>&1
+        fi
+    fi
+
+    find "$BACKUP_DIR" -name "backup-*.tar.gz" -mtime +7 -delete 2>/dev/null
+    exit 0
+fi
+
+while true; do
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}      BACKUP & RESTORE DATA VPS       ${NC}"
+    echo -e "${C}======================================${NC}"
+    echo -e " [1] Backup Data VPS Sekarang"
+    echo -e " [2] Restore Data dari File Lokal VPS"
+    echo -e " [3] Restore Data dari Link / URL Online"
+    echo -e " [4] Kirim File Backup ke Bot Telegram"
+    echo -e " [5] Lihat / Hapus File Backup Lokal"
+    echo -e " [6] Set Auto-Backup Otomatis (Cron Harian)"
+    echo -e " [0] Kembali ke Menu Utama"
+    echo -e "${C}======================================${NC}"
+    read -p " Pilih Opsi [0-6]: " opt_bck
+    case $opt_bck in
+        1) do_backup ;;
+        2) do_restore_local ;;
+        3) do_restore_url ;;
+        4) do_send_telegram ;;
+        5) do_manage_backups ;;
+        6) do_auto_backup_cron ;;
+        0) break ;;
+        *) ;;
+    esac
+done
+END
+chmod +x /usr/bin/menu-backup
+ln -sf /usr/bin/menu-backup /usr/bin/backup-vps
+ln -sf /usr/bin/menu-backup /usr/bin/restore-vps
 
 # Helper Scripts: VMESS, VLESS, TROJAN, Hapus Akun, List Akun & Xray Setup
 wget -qO /usr/local/bin/setup-xray https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/setup-xray.sh
@@ -1667,8 +2198,10 @@ chmod +x /usr/local/bin/auto-kill-multilogin
  echo "0 0 * * * /usr/local/bin/auto-delete"; \
  echo "*/2 * * * * /usr/local/bin/auto-kill-multilogin") | crontab -
 
-# Alias menu
+# Alias menu, backup, restore
 grep -qxF "alias menu='/usr/bin/menu'" ~/.bashrc || echo "alias menu='/usr/bin/menu'" >> ~/.bashrc
+grep -qxF "alias backup='/usr/bin/backup-vps'" ~/.bashrc || echo "alias backup='/usr/bin/backup-vps'" >> ~/.bashrc
+grep -qxF "alias restore='/usr/bin/restore-vps'" ~/.bashrc || echo "alias restore='/usr/bin/restore-vps'" >> ~/.bashrc
 
 # 15. Ringkasan Instalasi Tunneling
 clear
@@ -1692,4 +2225,5 @@ echo -e " 📥 PAYLOAD WEBSOCKET (HTTP Custom / Injector):"
 echo -e " \e[32mGET / HTTP/1.1[crlf]Host: $DOMAIN[crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]\e[0m"
 echo -e "\e[36m----------------------------------------------------\e[0m"
 echo -e " 👉 Ketik \e[33mmenu\e[0m di terminal VPS Anda untuk membuka Panel CLI."
+echo -e " 👉 Perintah Cepat: \e[33mbackup\e[0m (Backup Data) | \e[33mrestore\e[0m (Pulihkan Data)"
 echo -e "\e[36m====================================================\e[0m"
