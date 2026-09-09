@@ -21,6 +21,25 @@ if [[ "$1" == "--update-menu" ]]; then
     wget -qO /usr/local/bin/list-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/list-account.sh
     chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan /usr/local/bin/del-account /usr/local/bin/list-account
     
+    # Update Telegram Bot Script (Preserve Token)
+    if [ -f /usr/local/bin/vps-bot ]; then
+        existing_token=$(grep -oP 'BOT_TOKEN\s*=\s*"\K[^"]+' /usr/local/bin/vps-bot 2>/dev/null || true)
+        wget -qO /tmp/vps-bot.py https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py
+        if [ -s /tmp/vps-bot.py ]; then
+            cp -f /tmp/vps-bot.py /usr/local/bin/vps-bot
+            chmod +x /usr/local/bin/vps-bot
+            if [ -n "$existing_token" ] && [ "$existing_token" != "ISI_TOKEN_BOT_DISINI" ]; then
+                sed -i "s/BOT_TOKEN = \".*\"/BOT_TOKEN = \"$existing_token\"/g" /usr/local/bin/vps-bot
+            fi
+            systemctl restart vps-bot 2>/dev/null || true
+        fi
+        rm -f /tmp/vps-bot.py
+    else
+        wget -qO /usr/local/bin/vps-bot https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py
+        chmod +x /usr/local/bin/vps-bot
+        systemctl restart vps-bot 2>/dev/null || true
+    fi
+
     # Inisialisasi & Perbaiki Xray jika belum running atau belum ada
     if ! systemctl is-active --quiet xray 2>/dev/null || [ ! -f /usr/local/bin/xray ]; then
         echo -e "\e[33m[INFO] Menyiapkan & Memperbaiki Xray Core Engine di VPS...\e[0m"
