@@ -7,12 +7,14 @@ if [[ "$1" == "--update-menu" ]]; then
     awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
     chmod +x /usr/bin/menu /usr/bin/menu-service
     
-    # Download modul xray setup & add akun
+    # Download modul xray setup, add akun, del akun, & list akun
     wget -qO /usr/local/bin/setup-xray https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/setup-xray.sh
     wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
     wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
     wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
-    chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan
+    wget -qO /usr/local/bin/del-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/del-account.sh
+    wget -qO /usr/local/bin/list-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/list-account.sh
+    chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan /usr/local/bin/del-account /usr/local/bin/list-account
     
     # Inisialisasi Xray jika belum ada di VPS
     if [ ! -f /usr/local/bin/xray ] || [ ! -s /etc/xray/config.json ]; then
@@ -780,8 +782,8 @@ while true; do
     echo -e " [2] Buat Akun VMESS"
     echo -e " [3] Buat Akun VLESS"
     echo -e " [4] Buat Akun TROJAN"
-    echo -e " [5] Hapus Akun SSH/VPN"
-    echo -e " [6] List Akun Aktif & Expired"
+    echo -e " [5] Hapus Akun (SSH / VMESS / VLESS / TROJAN)"
+    echo -e " [6] List Akun (SSH / VMESS / VLESS / TROJAN)"
     echo -e " [7] Status Service & Port Tunneling"
     echo -e " [8] Cek Statistik Bandwidth VPS"
     echo -e " [9] Restart Semua Service"
@@ -932,64 +934,21 @@ while true; do
             ;;
         5)
             clear
-            read -p "Masukkan Username yang mau dihapus: " user
-            userdel -f $user 2>/dev/null
-            rm -f "/etc/premdigital/multilogin/$user" 2>/dev/null
-            if [ -f /etc/xray/config.json ]; then
-                python3 - <<EOF
-import json
-try:
-    with open("/etc/xray/config.json", "r") as f:
-        data = json.load(f)
-    changed = False
-    for ib in data.get("inbounds", []):
-        clients = ib.get("settings", {}).get("clients", [])
-        new_clients = [c for c in clients if c.get("email") != "$user"]
-        if len(new_clients) != len(clients):
-            ib["settings"]["clients"] = new_clients
-            changed = True
-    if changed:
-        with open("/etc/xray/config.json", "w") as f:
-            json.dump(data, f, indent=2)
-except:
-    pass
-EOF
-                systemctl restart xray >/dev/null 2>&1
+            if [ ! -f /usr/local/bin/del-account ]; then
+                echo -e "\e[33m[INFO] Mengunduh modul Hapus Akun...\e[0m"
+                wget -qO /usr/local/bin/del-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/del-account.sh
+                chmod +x /usr/local/bin/del-account
             fi
-            sed -i "/^$user |/d" /etc/premdigital/xray-users.db 2>/dev/null
-            echo -e "${R}Akun $user berhasil dihapus (SSH & Xray).${NC}"
-            sleep 1.5
+            /usr/local/bin/del-account
             ;;
         6)
             clear
-            echo -e "${C}======================================${NC}"
-            echo -e "${Y}         LIST AKUN SSH AKTIF          ${NC}"
-            echo -e "${C}======================================${NC}"
-            printf "%-14s %-12s %-10s\n" "USERNAME" "EXPIRED" "MAX IP"
-            echo -e "--------------------------------------"
-            awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd | while read line
-            do
-                exp=$(chage -l $line | grep "Account expires" | awk -F": " '{print $2}')
-                limit="2 IP"
-                if [ -f "/etc/premdigital/multilogin/$line" ]; then
-                    limit="$(cat "/etc/premdigital/multilogin/$line") IP"
-                fi
-                printf "%-14s %-12s %-10s\n" "$line" "$exp" "$limit"
-            done
-            if [ -f /etc/premdigital/xray-users.db ] && [ -s /etc/premdigital/xray-users.db ]; then
-                echo ""
-                echo -e "${C}======================================${NC}"
-                echo -e "${Y}      LIST AKUN XRAY (VMESS/VLESS/TR) ${NC}"
-                echo -e "${C}======================================${NC}"
-                printf "%-14s %-12s %-10s\n" "USERNAME" "EXPIRED" "PROTOKOL"
-                echo -e "--------------------------------------"
-                while IFS=" | " read -r xuser xuuid xexp xproto; do
-                    [ -n "$xuser" ] && printf "%-14s %-12s %-10s\n" "$xuser" "$xexp" "$xproto"
-                done < /etc/premdigital/xray-users.db
+            if [ ! -f /usr/local/bin/list-account ]; then
+                echo -e "\e[33m[INFO] Mengunduh modul List Akun...\e[0m"
+                wget -qO /usr/local/bin/list-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/list-account.sh
+                chmod +x /usr/local/bin/list-account
             fi
-            echo -e "${C}======================================${NC}"
-            echo ""
-            read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+            /usr/local/bin/list-account
             ;;
         7)
             clear
@@ -1287,12 +1246,14 @@ done
 END
 chmod +x /usr/bin/menu-service
 
-# Helper Scripts: VMESS, VLESS, TROJAN & Xray Setup
+# Helper Scripts: VMESS, VLESS, TROJAN, Hapus Akun, List Akun & Xray Setup
 wget -qO /usr/local/bin/setup-xray https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/setup-xray.sh
 wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
 wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
 wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
-chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan
+wget -qO /usr/local/bin/del-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/del-account.sh
+wget -qO /usr/local/bin/list-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/list-account.sh
+chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan /usr/local/bin/del-account /usr/local/bin/list-account
 bash /usr/local/bin/setup-xray
 
 # 14. Auto Delete Expired Accounts & Multi-Login Auto Kill (Max 2 IP)
