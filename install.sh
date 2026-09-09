@@ -158,7 +158,12 @@ cat > /etc/issue.net << 'END'
 <br>
 END
 cp -f /etc/issue.net /etc/issue 2>/dev/null || true
-cp -f /etc/issue.net /etc/motd 2>/dev/null || true
+cat > /etc/motd << 'END_MOTD'
+========================================
+        ★ PREMDIGITAL TUNNELING ★        
+========================================
+Silahkan Ketik { menu }
+END_MOTD
 
 cat > /etc/default/dropbear << 'END'
 NO_START=0
@@ -1087,7 +1092,12 @@ while true; do
 <br>
 BANNEREOF
                     cp -f /etc/issue.net /etc/issue 2>/dev/null || true
-                    cp -f /etc/issue.net /etc/motd 2>/dev/null || true
+                    cat > /etc/motd << 'END_MOTD'
+========================================
+        ★ PREMDIGITAL TUNNELING ★        
+========================================
+Silahkan Ketik { menu }
+END_MOTD
                     systemctl restart dropbear 2>/dev/null
                     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
                     echo -e "${G}Banner PremDigital berhasil dipasang & service direstart!${NC}"
