@@ -89,8 +89,10 @@ def send_message_with_keyboard(chat_id, text, reply_markup=None):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
     if reply_markup: payload["reply_markup"] = reply_markup
-    try: requests.post(url, json=payload)
-    except: pass
+    try: 
+        res = requests.post(url, json=payload).json()
+        return res.get("result", {}).get("message_id")
+    except: return None
 
 def edit_message_with_keyboard(chat_id, message_id, text, reply_markup=None):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
@@ -309,7 +311,6 @@ def process_callback(callback_query):
             
         server_code = f"{country_code}-{isp[:3].upper().replace(' ', '')}-1IP"
         
-        # Kalkulasi Total Create Akun Realtime vs Limit Admin
         try: current_acc = int(subprocess.getoutput("ls -1 /etc/premdigital/multilogin 2>/dev/null | wc -l"))
         except: current_acc = 0
         max_limit = get_server_limit()
@@ -362,6 +363,17 @@ def process_callback(callback_query):
                         "show_alert": True
                     })
                     return
+            
+            # --- ANIMASI LOADING JAM PASIR ---
+            frames = [
+                "⏳ <i>Sedang memproses trial...</i>",
+                "⌛ <i>Sedang memproses trial...</i>",
+                "⏳ <i>Sedang membuat akun...</i>",
+                "⌛ <i>Menyiapkan data server...</i>"
+            ]
+            for frame in frames:
+                edit_message_with_keyboard(chat_id, message_id, frame)
+                time.sleep(0.5)
             
             # --- GENERATE AKUN TRIAL OTOMATIS ---
             rnd_user = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
@@ -436,8 +448,7 @@ def process_callback(callback_query):
             )
             keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "cancel_order"}]]}
             edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
-
-    elif data == "menu_isi_saldo":
+            elif data == "menu_isi_saldo":
         msg = f"💰 <b>INPUT NOMINAL DEPOSIT</b>\n━━━━━━━━━━━━━━━━━━━━━━\nMetode: QRIS Otomatis\nLimit: Rp 1.000 - Rp 500.000\n\nSilakan ketik nominal deposit yang diinginkan.\nContoh: 10000"
         keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "back_to_main"}]]}
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
@@ -540,7 +551,19 @@ def process_message(text, chat_id, first_name, user_id):
                 save_db(db)
                 user_data['balance'] -= total_harga
             
-            send_message_with_keyboard(chat_id, "⏳ <i>Memproses pesanan, mohon tunggu sebentar...</i>")
+            # --- ANIMASI LOADING JAM PASIR ORDER ---
+            loading_msg_id = send_message_with_keyboard(chat_id, "⏳ <i>Memproses pesanan, mohon tunggu...</i>")
+            if loading_msg_id:
+                frames = [
+                    "⌛ <i>Memproses pesanan, mohon tunggu...</i>",
+                    "⏳ <i>Sedang membuat akun...</i>",
+                    "⌛ <i>Menyiapkan data server...</i>"
+                ]
+                for frame in frames:
+                    time.sleep(0.5)
+                    edit_message_with_keyboard(chat_id, loading_msg_id, frame)
+            else:
+                time.sleep(1.5)
             
             user_ssh = state['username']
             pwd_ssh = state['password']
@@ -582,7 +605,10 @@ def process_message(text, chat_id, first_name, user_id):
                 f"<code>GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]</code>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━"
             )
-            send_message_with_keyboard(chat_id, MSG)
+            if loading_msg_id:
+                edit_message_with_keyboard(chat_id, loading_msg_id, MSG)
+            else:
+                send_message_with_keyboard(chat_id, MSG)
             
             MSG_GROUP = (
                 f"📢 <b>NOTIFIKASI ORDER AKUN</b>\n"
