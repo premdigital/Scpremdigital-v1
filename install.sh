@@ -117,8 +117,29 @@ EOF
     systemctl enable stunnel4 2>/dev/null || true
     systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
 
+    # Pastikan Official Ookla Speedtest CLI terpasang
+    if ! command -v speedtest >/dev/null 2>&1; then
+        echo -e "\e[33m[INFO] Menyiapkan Official Ookla Speedtest CLI...\e[0m"
+        ARCH=$(uname -m)
+        case "$ARCH" in
+            x86_64|amd64) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz" ;;
+            aarch64|arm64) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-aarch64.tgz" ;;
+            armhf|armv7l) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-armhf.tgz" ;;
+            i386|i686) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-i386.tgz" ;;
+            *) ST_URL="" ;;
+        esac
+        if [ -n "$ST_URL" ]; then
+            curl -sLo /tmp/speedtest.tgz "$ST_URL" 2>/dev/null || wget -qO /tmp/speedtest.tgz "$ST_URL" 2>/dev/null
+            if [ -s /tmp/speedtest.tgz ]; then
+                tar -xzf /tmp/speedtest.tgz -C /usr/local/bin speedtest 2>/dev/null || tar -xzf /tmp/speedtest.tgz -C /usr/bin speedtest 2>/dev/null
+                chmod +x /usr/local/bin/speedtest 2>/dev/null || chmod +x /usr/bin/speedtest 2>/dev/null
+                rm -f /tmp/speedtest.tgz 2>/dev/null
+            fi
+        fi
+    fi
+
     rm -f /tmp/temp-install.sh
-    echo -e "\e[32mMenu, Modul Xray, Banner & Stunnel SSL berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
+    echo -e "\e[32mMenu, Modul Xray, Banner, Stunnel SSL & Ookla Speedtest berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
     exit 0
 fi
 
@@ -147,6 +168,28 @@ echo -e "\e[33m[INFO] Update & Install Packages (Non-interactive)...\e[0m"
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools psmisc lsof vnstat bc
+
+# Pasang Official Ookla Speedtest CLI
+echo -e "\e[33m[INFO] Memasang Official Ookla Speedtest CLI...\e[0m"
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|amd64) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz" ;;
+    aarch64|arm64) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-aarch64.tgz" ;;
+    armhf|armv7l) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-armhf.tgz" ;;
+    i386|i686) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-i386.tgz" ;;
+    *) ST_URL="" ;;
+esac
+if [ -n "$ST_URL" ]; then
+    curl -sLo /tmp/speedtest.tgz "$ST_URL" 2>/dev/null || wget -qO /tmp/speedtest.tgz "$ST_URL" 2>/dev/null
+    if [ -s /tmp/speedtest.tgz ]; then
+        tar -xzf /tmp/speedtest.tgz -C /usr/local/bin speedtest 2>/dev/null || tar -xzf /tmp/speedtest.tgz -C /usr/bin speedtest 2>/dev/null
+        chmod +x /usr/local/bin/speedtest 2>/dev/null || chmod +x /usr/bin/speedtest 2>/dev/null
+        rm -f /tmp/speedtest.tgz 2>/dev/null
+    fi
+fi
+if ! command -v speedtest >/dev/null 2>&1; then
+    apt-get install -y speedtest-cli >/dev/null 2>&1 || true
+fi
 
 # Matikan web server bawaan VPS & bebaskan port tunneling
 echo -e "\e[33m[INFO] Membersihkan port dan service yang berbenturan...\e[0m"
@@ -1109,9 +1152,10 @@ while true; do
             echo -e "${C}======================================${NC}"
             echo -e " [1] Set Kuota Bandwidth (Unlimited / Custom TB/GB)"
             echo -e " [2] Reset ke Auto-Detect Provider VPS"
+            echo -e " [3] Speedtest VPS (Ookla)"
             echo -e " [0] Kembali ke Menu Utama"
             echo -e "${C}======================================${NC}"
-            read -p " Pilih Opsi [0-2]: " opt_bw
+            read -p " Pilih Opsi [0-3]: " opt_bw
             case $opt_bw in
                 1)
                     mkdir -p /etc/premdigital
@@ -1139,6 +1183,50 @@ while true; do
                     rm -f /etc/premdigital/bandwidth_quota.txt 2>/dev/null
                     echo -e "${G}Kembali ke mode Auto-Detect provider VPS!${NC}"
                     sleep 1.5
+                    ;;
+                3)
+                    clear
+                    echo -e "${C}======================================${NC}"
+                    echo -e "${Y}       SPEEDTEST VPS (OOKLA)          ${NC}"
+                    echo -e "${C}======================================${NC}"
+                    if ! command -v speedtest >/dev/null 2>&1; then
+                        echo -e "${Y}[INFO] Mengunduh official binary Ookla Speedtest...${NC}"
+                        ARCH=$(uname -m)
+                        case "$ARCH" in
+                            x86_64|amd64) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz" ;;
+                            aarch64|arm64) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-aarch64.tgz" ;;
+                            armhf|armv7l) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-armhf.tgz" ;;
+                            i386|i686) ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-i386.tgz" ;;
+                            *) ST_URL="" ;;
+                        esac
+                        if [ -n "$ST_URL" ]; then
+                            curl -sLo /tmp/speedtest.tgz "$ST_URL" 2>/dev/null || wget -qO /tmp/speedtest.tgz "$ST_URL" 2>/dev/null
+                            if [ -s /tmp/speedtest.tgz ]; then
+                                tar -xzf /tmp/speedtest.tgz -C /usr/local/bin speedtest 2>/dev/null || tar -xzf /tmp/speedtest.tgz -C /usr/bin speedtest 2>/dev/null
+                                chmod +x /usr/local/bin/speedtest 2>/dev/null || chmod +x /usr/bin/speedtest 2>/dev/null
+                                rm -f /tmp/speedtest.tgz 2>/dev/null
+                            fi
+                        fi
+                    fi
+
+                    if ! command -v speedtest >/dev/null 2>&1 && ! command -v speedtest-cli >/dev/null 2>&1; then
+                        echo -e "${Y}[INFO] Memasang speedtest-cli via apt...${NC}"
+                        apt-get update -y >/dev/null 2>&1
+                        apt-get install -y speedtest-cli >/dev/null 2>&1
+                    fi
+
+                    echo -e "${G}Menjalankan uji kecepatan jaringan VPS via Ookla...${NC}"
+                    echo -e "--------------------------------------"
+                    if command -v speedtest >/dev/null 2>&1; then
+                        speedtest --accept-license --accept-gdpr
+                    elif command -v speedtest-cli >/dev/null 2>&1; then
+                        speedtest-cli --share
+                    else
+                        echo -e "${R}Gagal menjalankan speedtest. Pastikan koneksi internet VPS stabil.${NC}"
+                    fi
+                    echo -e "${C}======================================${NC}"
+                    echo ""
+                    read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
                     ;;
                 *)
                     ;;
