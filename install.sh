@@ -679,6 +679,26 @@ check_service() {
     fi
 }
 
+check_api() {
+    if ! systemctl is-active --quiet vps-api 2>/dev/null && ! pidof vps-api >/dev/null 2>&1; then
+        echo -e "${R}STOPPED${NC}"
+    elif grep -q 'API_SECRET = "PREMDIGITAL_RAHASIA_123"' /usr/local/bin/vps-api 2>/dev/null; then
+        echo -e "${Y}WAITING CONFIG${NC}"
+    else
+        echo -e "${G}RUNNING${NC}"
+    fi
+}
+
+check_bot() {
+    if ! systemctl is-active --quiet vps-bot 2>/dev/null && ! pidof vps-bot >/dev/null 2>&1; then
+        echo -e "${R}STOPPED${NC}"
+    elif grep -q 'BOT_TOKEN = "ISI_TOKEN_BOT_DISINI"' /usr/local/bin/vps-bot 2>/dev/null; then
+        echo -e "${Y}WAITING TOKEN${NC}"
+    else
+        echo -e "${G}RUNNING${NC}"
+    fi
+}
+
 check_wsproxy() {
     if systemctl is-active --quiet ws-proxy 2>/dev/null || pgrep -f "ws-proxy" >/dev/null 2>&1; then
         echo -e "${G}RUNNING${NC}"
@@ -970,8 +990,8 @@ while true; do
             echo -e " • OpenSSH Server     : $(check_service ssh)"
             echo -e " • BadVPN UDPGW       : $(check_service badvpn-udpgw)"
             echo -e " • Squid Proxy        : $(check_service squid)"
-            echo -e " • Web API Server     : $(check_service vps-api)"
-            echo -e " • Telegram Bot       : $(check_service vps-bot)"
+            echo -e " • Web API Server     : $(check_api)"
+            echo -e " • Telegram Bot       : $(check_bot)"
             echo -e "${C}--------------------------------------${NC}"
             echo -e " • Port 443 (WS Multiplexer) : $(check_port 443)"
             echo -e " • Port 80 (HTTP WebSocket)  : $(check_port 80)"
