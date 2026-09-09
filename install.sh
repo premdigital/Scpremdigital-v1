@@ -560,7 +560,10 @@ except:
     DOMAIN = "IP_VPS"
 
 def process_message(text, chat_id):
-    if text.startswith("/create"):
+    if text.startswith("/start") or text.startswith("/help"):
+        MSG = f"👋 Selamat datang di Bot PremDigital Tunnel!\n\nBot VPS Anda aktif dan berjalan normal. 🚀\n\nUntuk membuat akun SSH, gunakan format:\n`/create <user> <pass> <hari> [ip_limit]`\n\nContoh:\n`/create tester 123 30 2`"
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id": chat_id, "text": MSG, "parse_mode": "Markdown"})
+    elif text.startswith("/create"):
         parts = text.split()
         if len(parts) >= 4:
             user = parts[1]
