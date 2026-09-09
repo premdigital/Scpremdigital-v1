@@ -13,22 +13,19 @@ except:
 
 ADMIN_CONTACT = "t.me/T0M15"
 WEB_URL = "https://www.premdigital.web.id"
-VERSION = "v1.5 { PremDigital }"
+VERSION = "v1.7 { PremDigital }"
 OWNER_ID = "6010478011"
 GROUP_TESTI_ID = "-1004466282250" 
 
 TRIAL_SETTING_FILE = "/etc/premdigital/trial_setting.txt"
 TRIAL_LIMIT_FILE = "/etc/premdigital/trial_limit.txt"
 SERVER_LIMIT_FILE = "/etc/premdigital/server_limit.txt"
-
-# File Harga per IP
 PRICE_IP1_FILE = "/etc/premdigital/price_ip1.txt"
 PRICE_IP2_FILE = "/etc/premdigital/price_ip2.txt"
 PRICE_IP3_FILE = "/etc/premdigital/price_ip3.txt"
 PRICE_IP5_FILE = "/etc/premdigital/price_ip5.txt"
-
 DB_FILE = "/etc/premdigital/users_db.json"
-QRIS_IMAGE_URL = "https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/qris.jpg"
+QRIS_FILE_ID = "/etc/premdigital/qris_id.txt"
 
 USER_STATE = {}
 
@@ -195,6 +192,7 @@ def get_admin_menu_keyboard():
             [{"text": "⚙️ Pengaturan Trial", "callback_data": "admin_trial_setting"}],
             [{"text": "⚙️ Pengaturan Harga IP", "callback_data": "admin_price_setting"}],
             [{"text": "⚙️ Limit Max Server", "callback_data": "admin_server_limit"}],
+            [{"text": "🖼️ Set / Upload QRIS", "callback_data": "admin_set_qris"}],
             [{"text": "🔙 Kembali ke Main Menu", "callback_data": "back_to_main"}]
         ]
     }
@@ -335,6 +333,12 @@ def process_callback(callback_query):
         msg = "📢 <b>BROADCAST PESAN</b>\n━━━━━━━━━━━━━━━━━━━━━━\nKirim pesan massal ke semua member bot dengan:\n<code>/bc [PESAN ANDA]</code>\nContoh: <code>/bc Halo semuanya!</code>"
         keyboard = {"inline_keyboard": [[{"text": "🔙 Kembali", "callback_data": "back_to_admin"}]]}
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+        
+    elif data == "admin_set_qris":
+        USER_STATE[user_id] = {'step': 'upload_qris'}
+        msg = "🖼️ <b>UPLOAD QRIS</b>\n━━━━━━━━━━━━━━━━━━━━━━\nSilakan <b>kirimkan/upload foto barcode QRIS</b> Anda sekarang ke dalam chat ini.\n\n<i>(Foto yang Anda kirim akan otomatis disimpan dan dimunculkan ke user saat Top Up)</i>"
+        keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "back_to_admin"}]]}
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
     elif data == "admin_trial_setting":
         render_admin_trial_setting(chat_id, message_id)
@@ -393,8 +397,8 @@ def process_callback(callback_query):
         parts = data.split("_")
         action = parts[1]
         protocol = parts[2].upper()
-        
-        isp = "Unknown ISP"; country = "Unknown"; country_code = "UN"
+
+isp = "Unknown ISP"; country = "Unknown"; country_code = "UN"
         try:
             req_ip = requests.get("http://ip-api.com/json/", timeout=5).json()
             isp = req_ip.get("isp", "Unknown ISP")
@@ -631,6 +635,21 @@ def process_photo(message_data):
     state = USER_STATE.get(user_id, {})
     nominal = state.get('nominal', 0)
     
+    # --- ADMIN UPLOAD QRIS DARI DASHBOARD ---
+    if state.get('step') == 'upload_qris' and str(user_id) == str(OWNER_ID):
+        os.makedirs('/etc/premdigital', exist_ok=True)
+        with open(QRIS_FILE_ID, 'w') as f:
+            f.write(photo_file_id)
+        send_message_with_keyboard(chat_id, "✅ <b>FOTO QRIS BERHASIL DISIMPAN!</b>\nSekarang pembeli akan langsung melihat foto ini saat Top Up.")
+        del USER_STATE[user_id]
+        
+        # Kembali ke menu admin otomatis
+        msg_admin = get_admin_menu_text()
+        key_admin = get_admin_menu_keyboard()
+        send_message_with_keyboard(chat_id, msg_admin, reply_markup=key_admin)
+        return
+    # ----------------------------------------
+
     if state.get('step') == 'topup_pending':
         send_message_with_keyboard(chat_id, "⚠️ <b>Pengajuan Anda sedang diproses.</b>\nMohon tunggu admin memverifikasi struk Anda sebelumnya.")
         return
@@ -660,7 +679,9 @@ def process_photo(message_data):
         keyboard = None
 
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", json={"chat_id": OWNER_ID, "photo": photo_file_id, "caption": caption, "parse_mode": "HTML", "reply_markup": keyboard})
-    send_message_with_keyboard(chat_id, "⏳ <b>Struk berhasil dikirim!</b>\nMohon tunggu admin mengecek dan melakukan konfirmasi.")
+    
+    if state.get('step') != 'upload_qris':
+        send_message_with_keyboard(chat_id, "⏳ <b>Struk berhasil dikirim!</b>\nMohon tunggu admin mengecek dan melakukan konfirmasi.")
 
 def process_document(message_data):
     chat_id = message_data["chat"]["id"]
@@ -679,7 +700,6 @@ def process_message(text, chat_id, first_name, user_id):
     if user_id in USER_STATE and not text.startswith("/"):
         state = USER_STATE[user_id]
         
-        # --- PROSES INPUT HARGA IP ADMIN ---
         if state['step'].startswith('input_price_ip_'):
             if not text.isdigit():
                 send_message_with_keyboard(chat_id, "❌ <b>Format salah!</b>\nHarap masukkan angka saja (tanpa titik).\n\nSilakan ketik harga per hari:")
@@ -690,7 +710,6 @@ def process_message(text, chat_id, first_name, user_id):
             send_message_with_keyboard(chat_id, f"✅ Harga untuk <b>{ip_target} IP</b> berhasil diubah menjadi <b>Rp {text}/hari</b>.\nSilakan tekan /admin untuk kembali mengecek menu.")
             return
             
-        # --- PROSES TOP UP SALDO ---
         elif state['step'] == 'topup_nominal':
             if not text.isdigit():
                 send_message_with_keyboard(chat_id, "❌ <b>Format salah!</b>\nHarap masukkan angka saja (tanpa titik).\n\nSilakan ketik nominal deposit:")
@@ -714,10 +733,17 @@ def process_message(text, chat_id, first_name, user_id):
             )
             keyboard = {"inline_keyboard": [[{"text": "⛔ Batal Top Up", "callback_data": "back_to_main"}]]}
             
+            try:
+                with open(QRIS_FILE_ID, 'r') as f:
+                    qris_target = f.read().strip()
+            except:
+                send_message_with_keyboard(chat_id, "❌ <b>Admin belum memasang foto QRIS.</b>\nMohon tunggu admin mengatur QRIS terlebih dahulu.", reply_markup=keyboard)
+                return
+
             url_photo = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
             payload = {
                 "chat_id": chat_id, 
-                "photo": QRIS_IMAGE_URL, 
+                "photo": qris_target, 
                 "caption": msg, 
                 "parse_mode": "HTML", 
                 "reply_markup": keyboard
@@ -725,12 +751,15 @@ def process_message(text, chat_id, first_name, user_id):
             
             res = requests.post(url_photo, json=payload).json()
             if not res.get("ok"):
-                msg_fallback = msg + f"\n\n[ ⚠️ <i>Gagal memuat gambar QRIS, silakan gunakan link ini:</i> {QRIS_IMAGE_URL} ]"
-                send_message_with_keyboard(chat_id, msg_fallback, reply_markup=keyboard)
+                send_message_with_keyboard(chat_id, "❌ <b>Terjadi kesalahan sistem.</b>\nGambar QRIS tidak valid. Harap lapor admin.", reply_markup=keyboard)
             return
             
         elif state['step'] == 'awaiting_receipt':
             send_message_with_keyboard(chat_id, "⚠️ <b>Silakan kirim/upload FOTO STRUK bukti transfer.</b>\nBukan berupa teks (Jangan mengetik). Klik icon penjepit kertas lalu pilih foto struk.")
+            return
+
+        elif state['step'] == 'upload_qris':
+            send_message_with_keyboard(chat_id, "⚠️ <b>Admin, silakan kirim FOTO!</b>\nJangan kirim teks, langsung klik icon penjepit kertas dan kirim fotonya.")
             return
 
         elif state['step'] == 'topup_pending':
@@ -755,7 +784,7 @@ def process_message(text, chat_id, first_name, user_id):
             send_message_with_keyboard(chat_id, "✅ <i>Username diterima.</i>\n\nSilakan masukkan <b>password</b>:\n<i>(⚠️ Sama seperti username, huruf kecil & angka saja)</i>")
             return
             
-        elif state['step'] == 'password':
+           elif state['step'] == 'password':
             if text != text.lower() or not text.isalnum():
                 send_message_with_keyboard(chat_id, "❌ <b>Password tidak boleh menggunakan huruf kapital atau spasi.</b>\nGunakan huruf kecil dan angka saja.\n\nSilakan masukkan password kembali:")
                 return
@@ -772,9 +801,7 @@ def process_message(text, chat_id, first_name, user_id):
             hari = int(text)
             user_data = get_user(user_id)
             
-            # Ambil Limit IP yang di-save di state sebelumnya
             iplimit = state.get('iplimit', '1')
-            
             harga_per_hari = get_price_ip(iplimit)
             total_harga = hari * harga_per_hari
             
@@ -801,7 +828,7 @@ def process_message(text, chat_id, first_name, user_id):
             user_ssh = state['username']
             pwd_ssh = state['password']
             protocol = state['protocol']
-            ip_limit = iplimit # SESUAI DENGAN TOMBOL YANG DIKLIK (1,2,3, atau 5)
+            ip_limit = iplimit
             kuota_gb = "70"
             
             try: exp_date = (datetime.now() + timedelta(days=hari)).strftime('%Y-%m-%d')
@@ -932,8 +959,8 @@ def process_message(text, chat_id, first_name, user_id):
                     else:
                         send_message_with_keyboard(chat_id, "❌ ID User tidak ditemukan di database.")
                 else: send_message_with_keyboard(chat_id, "❌ Format: <code>/delreseller [ID_USER]</code>")
-                    
-        elif text.startswith("/bc"):
+
+                elif text.startswith("/bc"):
             if str(user_id) == str(OWNER_ID):
                 pesan = text.replace("/bc ", "")
                 if pesan and pesan != "/bc":
