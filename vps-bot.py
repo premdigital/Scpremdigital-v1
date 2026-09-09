@@ -11,7 +11,6 @@ try:
 except:
     DOMAIN = "IP_VPS"
 
-# Set konfigurasi tambahan
 ADMIN_CONTACT = "t.me/T0M15"
 WEB_URL = "https://www.premdigital.web.id"
 VERSION = "v1.0 (PremDigital)"
@@ -26,22 +25,119 @@ def send_message_with_keyboard(chat_id, text, reply_markup=None):
     }
     if reply_markup:
         payload["reply_markup"] = reply_markup
-        
     try:
         requests.post(url, json=payload)
-    except Exception as e:
+    except:
         pass
+
+def edit_message_with_keyboard(chat_id, message_id, text, reply_markup=None):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    try:
+        requests.post(url, json=payload)
+    except:
+        pass
+
+def get_main_menu_text(first_name, user_id):
+    return (
+        f"📦━━━━━━━[ <b>PREMDIGITAL</b> ]━━━━━━━📦\n\n"
+        f"👋 Selamat datang di <b>VPN AUTO ORDER</b> 💎\n"
+        f"Solusi kelola akun VPN cepat, aman, & otomatis 🚀\n\n"
+        f"🧭 <b>Informasi Akun (Bot)</b>\n"
+        f"┌───────────────────────┐\n"
+        f"├ 👤 <b>Nama :</b> {first_name}\n"
+        f"├ 🆔 <b>ID   :</b> <code>{user_id}</code>\n"
+        f"├ 👑 <b>Role :</b> ADMIN / OWNER\n"
+        f"└───────────────────────┘\n\n"
+        f"⚡ <b>Sistem</b>\n"
+        f"• Otomatis 24 Jam\n"
+        f"• Cepat & Stabil\n"
+        f"• Support Banyak Protocol\n\n"
+        f"☎️ <b>Admin</b>\n"
+        f"📧 {ADMIN_CONTACT}\n"
+        f"🌐 {WEB_URL}\n\n"
+        f"<i>Version {VERSION}</i>"
+    )
+
+def get_main_menu_keyboard():
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "🛒 Order Akun", "callback_data": "menu_order_akun"},
+                {"text": "🆓 Trial Akun", "callback_data": "menu_trial_akun"}
+            ],
+            [
+                {"text": "🔄 Perpanjang", "callback_data": "menu_perpanjang"},
+                {"text": "💳 Isi Saldo", "callback_data": "menu_isi_saldo"}
+            ],
+            [
+                {"text": "📋 Daftar Akun Saya", "callback_data": "menu_daftar_akun"}
+            ],
+            [
+                {"text": "🚀 Upgrade Reseller", "callback_data": "menu_upgrade_reseller"}
+            ],
+            [
+                {"text": "👨‍💻 Hubungi Admin ↗️", "url": f"https://{ADMIN_CONTACT}"}
+            ]
+        ]
+    }
 
 def process_callback(callback_query):
     chat_id = callback_query["message"]["chat"]["id"]
+    message_id = callback_query["message"]["message_id"]
+    first_name = callback_query["message"]["chat"].get("first_name", "User")
+    user_id = callback_query["from"]["id"]
     data = callback_query["data"]
     
-    # Menjawab callback agar loading di tombol hilang
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={"callback_query_id": callback_query["id"]})
 
-    if data == "menu_ssh":
+    if data == "back_to_main":
+        msg = get_main_menu_text(first_name, user_id)
+        keyboard = get_main_menu_keyboard()
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
+    elif data in ["menu_order_akun", "menu_trial_akun"]:
+        tipe = "ORDER" if data == "menu_order_akun" else "TRIAL"
         msg = (
-            f"📖 <b>DAFTAR SERVER SSH</b>\n"
+            f"⚙️ <b>PILIH PROTOKOL/LAYANAN {tipe}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Silakan pilih jenis layanan VPN yang ingin Anda buat:"
+        )
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "SSH", "callback_data": f"select_{tipe.lower()}_ssh"},
+                    {"text": "VMESS", "callback_data": f"select_{tipe.lower()}_vmess"}
+                ],
+                [
+                    {"text": "VLESS", "callback_data": f"select_{tipe.lower()}_vless"},
+                    {"text": "TROJAN", "callback_data": f"select_{tipe.lower()}_trojan"}
+                ],
+                [
+                    {"text": "UDP ZIVPN", "callback_data": f"select_{tipe.lower()}_udp"}
+                ],
+                [
+                    {"text": "🔙 Kembali", "callback_data": "back_to_main"}
+                ]
+            ]
+        }
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
+    elif data.startswith("select_"):
+        parts = data.split("_")
+        action = parts[1] # order atau trial
+        protocol = parts[2].upper()
+        
+        msg = (
+            f"📖 <b>DAFTAR SERVER {protocol}</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📁 <b>Server 1 :</b> 🇸🇬 SINGAPORE\n"
             f"⚡ <b>Ping :</b> 30 ms 🟢\n"
@@ -59,111 +155,100 @@ def process_callback(callback_query):
             f"📊 <b>Kuota:</b> Unlimited\n"
             f"📱 <b>Limit IP:</b> 2 Device\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"<i>Pilih nomor server di bawah untuk melanjutkan order:</i>"
+            f"<i>Pilih nomor server di bawah untuk melanjutkan {action.upper()}:</i>"
         )
         
-        # Tombol angka berjejer ke samping, tombol kembali di bawahnya
         keyboard = {
             "inline_keyboard": [
                 [
-                    {"text": "1", "callback_data": "order_sg_1ip"},
-                    {"text": "2", "callback_data": "order_id_2ip"}
+                    {"text": "1", "callback_data": f"do_{action}_{protocol}_1"},
+                    {"text": "2", "callback_data": f"do_{action}_{protocol}_2"}
                 ],
                 [
-                    {"text": "🔙 Kembali", "callback_data": "back_to_main"}
+                    {"text": "🔙 Kembali", "callback_data": f"menu_{action}_akun"}
                 ]
             ]
         }
-        send_message_with_keyboard(chat_id, msg, reply_markup=keyboard)
-        
-    elif data == "back_to_main":
-        # Mengirim ulang menu utama
-        process_message("/start", chat_id, "User", callback_query["from"]["id"])
-        
-    elif data.startswith("order_"):
-        # Logika ketika user menekan tombol angka (Server 1 atau 2)
-        server_code = data.split("_")[1].upper()
-        limit_ip = data.split("_")[2]
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
+    elif data.startswith("do_"):
+        parts = data.split("_")
+        action = parts[1]
+        protocol = parts[2]
+        server = parts[3]
         
         msg = (
-            f"🛒 <b>ORDER DALAM PROSES</b>\n"
+            f"🛒 <b>{action.upper()} DALAM PROSES</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"Anda memilih Server <b>{server_code}</b> ({limit_ip}).\n\n"
-            f"Gunakan perintah manual untuk saat ini:\n"
-            f"<code>/create [username] [password] [hari] {limit_ip.replace('ip','')}</code>\n\n"
-            f"<i>*Sistem potong saldo sedang dalam pengembangan.</i>"
+            f"Anda memilih Server <b>{server}</b> ({protocol}).\n\n"
+            f"Silakan gunakan perintah manual untuk saat ini:\n"
+            f"<code>/create [username] [password] [hari] [limit_ip]</code>\n\n"
+            f"<i>*Sistem potong saldo otomatis sedang dalam tahap akhir pengembangan.</i>"
         )
         keyboard = {
             "inline_keyboard": [
-                [{"text": "🔙 Kembali", "callback_data": "menu_ssh"}]
+                [{"text": "🔙 Kembali", "callback_data": f"select_{action}_{protocol.lower()}"}]
             ]
         }
-        send_message_with_keyboard(chat_id, msg, reply_markup=keyboard)
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
+    # --- MENU TAMBAHAN (Saldo, Reseller, dll) ---
+    elif data == "menu_isi_saldo":
+        msg = (
+            f"💰 <b>INPUT NOMINAL DEPOSIT</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Metode: QRIS Otomatis\n"
+            f"Limit: Rp 1.000 - Rp 500.000\n\n"
+            f"Silakan ketik nominal deposit yang diinginkan.\n"
+            f"Contoh: 10000"
+        )
+        keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "back_to_main"}]]}
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
+    elif data in ["menu_perpanjang", "menu_daftar_akun"]:
+        msg = (
+            f"⚠️ <b>TIDAK ADA AKUN</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Anda belum memiliki layanan aktif atau tidak ada akun yang bisa diperbarui."
+        )
+        keyboard = {"inline_keyboard": [[{"text": "🔙 Kembali", "callback_data": "back_to_main"}]]}
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
+    elif data == "menu_upgrade_reseller":
+        msg = (
+            f"🚀 <b>UPGRADE RESELLER</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Menjadi reseller memberikan keuntungan:\n"
+            f"✅ Harga Lebih Murah\n"
+            f"✅ Trial Akun TANPA BATAS\n"
+            f"✅ Prioritas Support\n\n"
+            f"💡 <b>Cara Upgrade:</b>\n"
+            f"Silakan lakukan ISI SALDO sebesar Rp 25.000. Sistem akan otomatis mengubah role Anda menjadi RESELLER."
+        )
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "💸 Bayar Rp 25.000 (QRIS)", "callback_data": "menu_coming_soon"}],
+                [{"text": "🔙 Kembali", "callback_data": "back_to_main"}]
+            ]
+        }
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
     elif data == "menu_coming_soon":
-        send_message_with_keyboard(chat_id, "<i>⚠️ Fitur ini sedang dalam tahap pengembangan.</i>")
-    elif data == "menu_status":
-        uptime = subprocess.getoutput("uptime -p").replace("up ", "")
-        try:
-            mem = subprocess.getoutput("free -m | awk 'NR==2{printf \"%.2f%%\", $3*100/$2 }'")
-        except:
-            mem = "Unknown"
-        msg = (
-            f"<b>📊 STATUS SERVER</b>\n"
-            f"┌─────────────────┐\n"
-            f"├ 🌐 <b>Domain:</b> <code>{DOMAIN}</code>\n"
-            f"├ ⏱ <b>Uptime:</b> {uptime}\n"
-            f"├ 💾 <b>RAM Use:</b> {mem}\n"
-            f"└─────────────────┘"
-        )
-        send_message_with_keyboard(chat_id, msg)
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
+            "callback_query_id": callback_query["id"],
+            "text": "⚠️ Fitur ini sedang dalam tahap pengembangan.",
+            "show_alert": True
+        })
 
 def process_message(text, chat_id, first_name, user_id):
     text = text.strip()
     
     if text.startswith("/start") or text.startswith("/help") or text.lower() == "menu":
-        msg = (
-            f"📦━━━━━━━[ <b>PREMDIGITAL</b> ]━━━━━━━📦\n\n"
-            f"👋 Selamat datang di <b>VPN AUTO ORDER</b> 💎\n"
-            f"Solusi kelola akun VPN cepat, aman, & otomatis 🚀\n\n"
-            f"🧭 <b>Informasi Akun (Bot)</b>\n"
-            f"┌───────────────────────┐\n"
-            f"├ 👤 <b>Nama :</b> {first_name}\n"
-            f"├ 🆔 <b>ID   :</b> <code>{user_id}</code>\n"
-            f"├ 👑 <b>Role :</b> ADMIN / OWNER\n"
-            f"└───────────────────────┘\n\n"
-            f"⚡ <b>Sistem</b>\n"
-            f"• Otomatis 24 Jam\n"
-            f"• Cepat & Stabil\n"
-            f"• Support Banyak Protocol\n\n"
-            f"☎️ <b>Admin</b>\n"
-            f"📧 {ADMIN_CONTACT}\n"
-            f"🌐 {WEB_URL}\n\n"
-            f"<i>Version {VERSION}</i>"
-        )
-        
-        keyboard = {
-            "inline_keyboard": [
-                [
-                    {"text": "🔑 Buat Ssh/Ovpn/Udp", "callback_data": "menu_ssh"}
-                ],
-                [
-                    {"text": "⚡ Buat Vmess", "callback_data": "menu_coming_soon"},
-                    {"text": "🛡️ Buat Vless", "callback_data": "menu_coming_soon"}
-                ],
-                [
-                    {"text": "🚀 Buat Trojan", "callback_data": "menu_coming_soon"},
-                    {"text": "📊 Status Server", "callback_data": "menu_status"}
-                ],
-                [
-                    {"text": "👨‍💻 Hubungi Admin ↗️", "url": f"https://{ADMIN_CONTACT}"}
-                ]
-            ]
-        }
-        
+        msg = get_main_menu_text(first_name, user_id)
+        keyboard = get_main_menu_keyboard()
         send_message_with_keyboard(chat_id, msg, reply_markup=keyboard)
 
-    # === MENU CREATE AKUN MANUAL (Tetap dipertahankan untuk saat ini) ===
+    # === MENU CREATE AKUN MANUAL (Tetap dipertahankan untuk backup) ===
     elif text.startswith("/create"):
         parts = text.split()
         if len(parts) >= 4:
@@ -216,7 +301,7 @@ def process_message(text, chat_id, first_name, user_id):
             )
             send_message_with_keyboard(chat_id, MSG)
 
-# === SETUP TOMBOL MENU UTAMA ===
+# === SETUP TOMBOL MENU UTAMA (Tombol Biru Kiri Bawah) ===
 def setup_bot_menu():
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/setMyCommands"
     commands = {
