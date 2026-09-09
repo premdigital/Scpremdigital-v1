@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-import requests, time, os, subprocess, json, random, string
+import requests, time, os, subprocess, json, random, string, base64, uuid
 from datetime import datetime, timedelta
 
 BOT_TOKEN = "ISI_TOKEN_BOT_DISINI"
@@ -36,6 +36,9 @@ QUOTA_FILE = "/etc/premdigital/quota_setting.txt"
 DB_FILE = "/etc/premdigital/users_db.json"
 QRIS_FILE_ID = "/etc/premdigital/qris_id.txt"
 
+CONFIG_XRAY = "/etc/xray/config.json"
+XRAY_DB = "/etc/premdigital/xray-users.db"
+
 USER_STATE = {}
 
 def load_db():
@@ -55,8 +58,11 @@ def get_user(user_id):
     db = load_db()
     uid = str(user_id)
     if uid not in db:
-        db[uid] = {"balance": 0, "role": "USER", "trial_count": 0, "last_trial_date": ""}
+        db[uid] = {"balance": 0, "role": "USER", "trial_count": 0, "last_trial_date": "", "accounts": []}
         if uid == str(OWNER_ID): db[uid]["role"] = "ADMIN"
+        save_db(db)
+    elif "accounts" not in db[uid]:
+        db[uid]["accounts"] = []
         save_db(db)
     return db[uid]
 
@@ -134,6 +140,77 @@ def set_reseller_price(limit, price):
         with open(paths[str(limit)], 'w') as f: f.write(str(price))
     except: pass
 
+# ==========================================================
+# XRAY HELPER & LINK GENERATOR
+# ==========================================================
+def ensure_xray_ready():
+    if not os.path.exists('/usr/local/bin/xray') or not os.path.exists(CONFIG_XRAY):
+        if os.path.exists('/usr/local/bin/setup-xray'):
+            os.system('bash /usr/local/bin/setup-xray >/dev/null 2>&1')
+
+def add_xray_client(protocol, user, credential):
+    ensure_xray_ready()
+    proto = protocol.lower()
+    try:
+        with open(CONFIG_XRAY, 'r') as f:
+            data = json.load(f)
+        for ib in data.get("inbounds", []):
+            if ib.get("protocol") == proto:
+                clients = ib.setdefault("settings", {}).setdefault("clients", [])
+                clients[:] = [c for c in clients if c.get("email") != user]
+                if proto == "vmess":
+                    clients.append({"id": str(credential), "alterId": 0, "email": user})
+                elif proto == "vless":
+                    clients.append({"id": str(credential), "email": user})
+                elif proto == "trojan":
+                    clients.append({"password": str(credential), "email": user})
+        with open(CONFIG_XRAY, 'w') as f:
+            json.dump(data, f, indent=2)
+        os.system("systemctl restart xray >/dev/null 2>&1")
+        return True
+    except:
+        return False
+
+def record_xray_db(user, credential, exp_date, protocol):
+    os.makedirs('/etc/premdigital', exist_ok=True)
+    lines = []
+    if os.path.exists(XRAY_DB):
+        with open(XRAY_DB, 'r') as f:
+            lines = [l for l in f if not l.strip().startswith(f"{user} |")]
+    lines.append(f"{user} | {credential} | {exp_date} | {protocol.lower()}\n")
+    with open(XRAY_DB, 'w') as f:
+        f.writelines(lines)
+
+def generate_vmess_links(user, user_uuid, domain):
+    j_tls = {"v": "2", "ps": user, "add": domain, "port": "443", "id": str(user_uuid), "aid": "0", "net": "ws", "path": "/vmess", "type": "none", "host": domain, "sni": domain, "tls": "tls"}
+    b64_tls = base64.b64encode(json.dumps(j_tls).encode()).decode()
+    link_ws_tls = f"vmess://{b64_tls}"
+
+    j_ntls = {"v": "2", "ps": user, "add": domain, "port": "80", "id": str(user_uuid), "aid": "0", "net": "ws", "path": "/vmess", "type": "none", "host": domain, "sni": "", "tls": "none"}
+    b64_ntls = base64.b64encode(json.dumps(j_ntls).encode()).decode()
+    link_ws_ntls = f"vmess://{b64_ntls}"
+
+    j_grpc = {"v": "2", "ps": user, "add": domain, "port": "443", "id": str(user_uuid), "aid": "0", "net": "grpc", "path": "vmess", "type": "gun", "host": domain, "sni": domain, "tls": "tls"}
+    b64_grpc = base64.b64encode(json.dumps(j_grpc).encode()).decode()
+    link_grpc = f"vmess://{b64_grpc}"
+
+    return link_ws_tls, link_ws_ntls, link_grpc
+
+def generate_vless_links(user, user_uuid, domain):
+    link_ws_tls = f"vless://{user_uuid}@{domain}:443?path=/vless&security=tls&encryption=none&host={domain}&type=ws&sni={domain}#{user}"
+    link_ws_ntls = f"vless://{user_uuid}@{domain}:80?path=/vless&security=none&encryption=none&host={domain}&type=ws#{user}"
+    link_grpc = f"vless://{user_uuid}@{domain}:443?mode=multi&security=tls&encryption=none&type=grpc&serviceName=vless&sni={domain}#{user}"
+    return link_ws_tls, link_ws_ntls, link_grpc
+
+def generate_trojan_links(user, password, domain):
+    link_ws_tls = f"trojan://{password}@{domain}:443?path=/trojan&security=tls&host={domain}&type=ws&sni={domain}#{user}"
+    link_ws_ntls = f"trojan://{password}@{domain}:80?path=/trojan&security=none&host={domain}&type=ws#{user}"
+    link_grpc = f"trojan://{password}@{domain}:443?mode=multi&security=tls&type=grpc&serviceName=trojan&sni={domain}#{user}"
+    return link_ws_tls, link_ws_ntls, link_grpc
+
+# ==========================================================
+# TELEGRAM API HELPERS
+# ==========================================================
 def send_message_with_keyboard(chat_id, text, reply_markup=None):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
@@ -166,9 +243,28 @@ def get_main_menu_text(first_name, user_id):
     saldo_str = f"Rp {user_data['balance']:,}".replace(',', '.')
     role_str = user_data['role']
     if str(user_id) == str(OWNER_ID): role_str = "ADMIN / OWNER"
-    try: ssh_count = int(subprocess.getoutput("ls -1 /etc/premdigital/multilogin 2>/dev/null | wc -l"))
-    except: ssh_count = 0
+    
     vmess_count = vless_count = trojan_count = 0
+    xray_users = set()
+    if os.path.exists(XRAY_DB):
+        try:
+            with open(XRAY_DB, 'r') as f:
+                for line in f:
+                    parts = [p.strip() for p in line.split('|')]
+                    if len(parts) >= 4:
+                        xray_users.add(parts[0])
+                        proto = parts[3].lower()
+                        if proto == 'vmess': vmess_count += 1
+                        elif proto == 'vless': vless_count += 1
+                        elif proto == 'trojan': trojan_count += 1
+        except: pass
+        
+    try:
+        all_ml = os.listdir('/etc/premdigital/multilogin')
+        ssh_count = len([u for u in all_ml if u not in xray_users])
+    except:
+        ssh_count = 0
+        
     total_count = ssh_count + vmess_count + vless_count + trojan_count
     return (
         f"📦━━━━━━━[ <b>PREMDIGITAL</b> ]━━━━━━━📦\n\n"
@@ -317,7 +413,9 @@ def render_admin_server_limit(chat_id, message_id):
     }
     edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
-
+# ==========================================================
+# CALLBACK QUERY DISPATCHER
+# ==========================================================
 def process_callback(callback_query):
     chat_id = callback_query["message"]["chat"]["id"]
     message_id = callback_query["message"]["message_id"]
@@ -339,6 +437,38 @@ def process_callback(callback_query):
         if user_id in USER_STATE: del USER_STATE[user_id]
         msg = get_main_menu_text(first_name, user_id)
         keyboard = get_main_menu_keyboard()
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
+    elif data == "menu_daftar_akun":
+        user_data = get_user(user_id)
+        acc_list = user_data.get("accounts", [])
+        if not acc_list:
+            msg = (
+                "📋 <b>DAFTAR AKUN SAYA</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Anda belum memiliki akun aktif yang dibuat di bot ini.\n\n"
+                "Silakan klik tombol <b>Order Akun</b> atau <b>Trial Akun</b> untuk membuat akun baru!"
+            )
+        else:
+            msg = "📋 <b>DAFTAR AKUN SAYA</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            for idx, acc in enumerate(acc_list, start=1):
+                p_name = acc.get("protocol", "SSH").upper()
+                u_name = acc.get("username", "-")
+                e_date = acc.get("exp_date", "-")
+                msg += f"<b>{idx}. [{p_name}]</b> <code>{u_name}</code>\n"
+                msg += f"    📅 Expired: {e_date}\n\n"
+        keyboard = {"inline_keyboard": [[{"text": "🔙 Kembali ke Main Menu", "callback_data": "back_to_main"}]]}
+        edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
+    elif data == "menu_perpanjang":
+        USER_STATE[user_id] = {'step': 'renew_username'}
+        msg = (
+            "🔄 <b>PERPANJANG AKUN VPN</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Silakan ketik <b>username</b> akun yang ingin Anda perpanjang:\n\n"
+            "<i>(Pastikan saldo mencukupi sesuai tarif durasi perpanjangan)</i>"
+        )
+        keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "back_to_main"}]]}
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
     elif data.startswith("acc_topup_"):
@@ -462,8 +592,8 @@ def process_callback(callback_query):
         msg = f"⚙️ <b>PILIH PROTOKOL/LAYANAN {tipe}</b>\n━━━━━━━━━━━━━━━━━━━━━━\nSilakan pilih jenis layanan VPN yang ingin Anda buat:"
         keyboard = {
             "inline_keyboard": [
-                [{"text": "SSH", "callback_data": f"select_{tipe.lower()}_ssh"}, {"text": "VMESS", "callback_data": "menu_coming_soon"}],
-                [{"text": "VLESS", "callback_data": "menu_coming_soon"}, {"text": "TROJAN", "callback_data": "menu_coming_soon"}],
+                [{"text": "SSH", "callback_data": f"select_{tipe.lower()}_ssh"}, {"text": "VMESS", "callback_data": f"select_{tipe.lower()}_vmess"}],
+                [{"text": "VLESS", "callback_data": f"select_{tipe.lower()}_vless"}, {"text": "TROJAN", "callback_data": f"select_{tipe.lower()}_trojan"}],
                 [{"text": "🔙 Kembali", "callback_data": "back_to_main"}]
             ]
         }
@@ -550,7 +680,7 @@ def process_callback(callback_query):
     elif data.startswith("do_"):
         parts = data.split("_")
         action = parts[1]
-        protocol = parts[2]
+        protocol = parts[2].upper()
         server = parts[3]
         iplimit = parts[4] if len(parts) > 4 else "1"
         
@@ -574,55 +704,119 @@ def process_callback(callback_query):
                     except: pass
                     return
             
-            frames = ["⏳ <i>Sedang memproses trial...</i>", "⌛ <i>Sedang memproses trial...</i>", "⏳ <i>Sedang membuat akun...</i>", "⌛ <i>Menyiapkan data server...</i>"]
+            frames = ["⏳ <i>Sedang memproses trial...</i>", "⌛ <i>Sedang membuat akun...</i>", "⌛ <i>Menyiapkan data server...</i>"]
             for frame in frames:
                 edit_message_with_keyboard(chat_id, message_id, frame)
-                time.sleep(0.5)
+                time.sleep(0.4)
             
             rnd_user = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
             rnd_pass = ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
             
-            user = f"trial{rnd_user}"
+            user = f"tr{protocol.lower()[:2]}{rnd_user}"
             pwd = rnd_pass
             ip_limit = "1"
             kuota_gb = "5"
-            
             exp_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-            os.system(f'useradd -e {exp_date} -m -s /bin/false -M {user}')
-            os.system(f'echo "{user}:{pwd}" | chpasswd')
-            os.system('mkdir -p /etc/premdigital/multilogin /etc/premdigital/user_quota')
-            os.system(f'echo "{ip_limit}" > /etc/premdigital/multilogin/{user}')
-            os.system(f'echo "{kuota_gb}" > /etc/premdigital/user_quota/{user}')
+            durasi_label = get_trial_duration()
             
+            os.makedirs('/etc/premdigital/multilogin', exist_ok=True)
+            os.makedirs('/etc/premdigital/user_quota', exist_ok=True)
+            with open(f'/etc/premdigital/multilogin/{user}', 'w') as f: f.write(str(ip_limit))
+            with open(f'/etc/premdigital/user_quota/{user}', 'w') as f: f.write(str(kuota_gb))
+
+            if protocol == "SSH":
+                os.system(f'useradd -e {exp_date} -m -s /bin/false -M {user}')
+                os.system(f'echo "{user}:{pwd}" | chpasswd')
+                msg = (
+                    f"<b>✅ AKUN TRIAL SSH BERHASIL DIBUAT</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Username :</b> <code>{user}</code>\n"
+                    f"🔑 <b>Password :</b> <code>{pwd}</code>\n"
+                    f"🌐 <b>Host/IP  :</b> <code>{DOMAIN}</code>\n"
+                    f"⏳ <b>Durasi   :</b> {durasi_label}\n"
+                    f"📅 <b>Expired  :</b> {exp_date}\n"
+                    f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"<b>🔌 PORT LAYANAN:</b>\n"
+                    f"▪️ TLS/SSL  : 443, 8443\n"
+                    f"▪️ HTTP/WS  : 80, 8880, 2082\n"
+                    f"▪️ OpenSSH  : 22, 2253\n"
+                    f"▪️ Dropbear : 109, 143\n"
+                    f"▪️ UDPGW    : 7100\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"<b>📥 PAYLOAD WEBSOCKET:</b>\n"
+                    f"<code>GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━"
+                )
+            elif protocol == "VMESS":
+                user_uuid = str(uuid.uuid4())
+                add_xray_client("vmess", user, user_uuid)
+                record_xray_db(user, user_uuid, exp_date, "vmess")
+                l_tls, l_ntls, l_grpc = generate_vmess_links(user, user_uuid, DOMAIN)
+                msg = (
+                    f"<b>✅ AKUN TRIAL VMESS BERHASIL DIBUAT</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Username :</b> <code>{user}</code>\n"
+                    f"🆔 <b>UUID     :</b> <code>{user_uuid}</code>\n"
+                    f"🌐 <b>Host/SNI :</b> <code>{DOMAIN}</code>\n"
+                    f"⏳ <b>Durasi   :</b> {durasi_label}\n"
+                    f"📅 <b>Expired  :</b> {exp_date}\n"
+                    f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔒 <b>1. VMESS WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
+                    f"🔓 <b>2. VMESS WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
+                    f"⚡ <b>3. VMESS gRPC (Port 443):</b>\n<code>{l_grpc}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━"
+                )
+            elif protocol == "VLESS":
+                user_uuid = str(uuid.uuid4())
+                add_xray_client("vless", user, user_uuid)
+                record_xray_db(user, user_uuid, exp_date, "vless")
+                l_tls, l_ntls, l_grpc = generate_vless_links(user, user_uuid, DOMAIN)
+                msg = (
+                    f"<b>✅ AKUN TRIAL VLESS BERHASIL DIBUAT</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Username :</b> <code>{user}</code>\n"
+                    f"🆔 <b>UUID     :</b> <code>{user_uuid}</code>\n"
+                    f"🌐 <b>Host/SNI :</b> <code>{DOMAIN}</code>\n"
+                    f"⏳ <b>Durasi   :</b> {durasi_label}\n"
+                    f"📅 <b>Expired  :</b> {exp_date}\n"
+                    f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔒 <b>1. VLESS WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
+                    f"🔓 <b>2. VLESS WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
+                    f"⚡ <b>3. VLESS gRPC (Port 443):</b>\n<code>{l_grpc}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━"
+                )
+            elif protocol == "TROJAN":
+                add_xray_client("trojan", user, pwd)
+                record_xray_db(user, pwd, exp_date, "trojan")
+                l_tls, l_ntls, l_grpc = generate_trojan_links(user, pwd, DOMAIN)
+                msg = (
+                    f"<b>✅ AKUN TRIAL TROJAN BERHASIL DIBUAT</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Username :</b> <code>{user}</code>\n"
+                    f"🔑 <b>Password :</b> <code>{pwd}</code>\n"
+                    f"🌐 <b>Host/SNI :</b> <code>{DOMAIN}</code>\n"
+                    f"⏳ <b>Durasi   :</b> {durasi_label}\n"
+                    f"📅 <b>Expired  :</b> {exp_date}\n"
+                    f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔒 <b>1. TROJAN WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
+                    f"🔓 <b>2. TROJAN WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
+                    f"⚡ <b>3. TROJAN gRPC (Port 443):</b>\n<code>{l_grpc}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━"
+                )
+
             if user_data["role"] not in ["RESELLER", "ADMIN"]:
                 user_data["trial_count"] = current_count + 1
                 db[user_id_str] = user_data
                 save_db(db)
                 
-            durasi_label = get_trial_duration()
-            
-            msg = (
-                f"<b>✅ AKUN TRIAL {protocol.upper()} BERHASIL DIBUAT</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👤 <b>Username :</b> <code>{user}</code>\n"
-                f"🔑 <b>Password :</b> <code>{pwd}</code>\n"
-                f"🌐 <b>Host/IP  :</b> <code>{DOMAIN}</code>\n"
-                f"⏳ <b>Durasi   :</b> {durasi_label}\n"
-                f"📅 <b>Expired  :</b> {exp_date}\n"
-                f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<b>🔌 PORT LAYANAN:</b>\n"
-                f"▪️ TLS/SSL  : 443, 8443\n"
-                f"▪️ HTTP/WS  : 80, 8880, 2082\n"
-                f"▪️ OpenSSH  : 22, 2253\n"
-                f"▪️ Dropbear : 109, 143\n"
-                f"▪️ UDPGW    : 7100\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<b>📥 PAYLOAD WEBSOCKET:</b>\n"
-                f"<code>GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]</code>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━"
-            )
             keyboard = {"inline_keyboard": [[{"text": "🔙 Kembali", "callback_data": f"select_{action}_{protocol.lower()}"}]]}
             edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
             
@@ -630,7 +824,7 @@ def process_callback(callback_query):
                 f"📢 <b>NOTIFIKASI TRIAL AKUN</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"👤 <b>Pelanggan :</b> <a href='tg://user?id={user_id}'>{first_name}</a>\n"
-                f"🛠 <b>Layanan   :</b> {protocol.upper()}\n"
+                f"🛠 <b>Layanan   :</b> {protocol}\n"
                 f"⏳ <b>Durasi    :</b> {durasi_label}\n"
                 f"📱 <b>Limit IP  :</b> {ip_limit} Device\n"
                 f"✅ <b>Status    :</b> Berhasil (Sukses)\n"
@@ -642,12 +836,12 @@ def process_callback(callback_query):
         else:
             USER_STATE[user_id] = {'step': 'username', 'server': server, 'protocol': protocol, 'iplimit': iplimit}
             msg = (
-                f"📝 <b>PEMBUATAN AKUN {protocol.upper()} ({iplimit} IP)</b>\n"
+                f"📝 <b>PEMBUATAN AKUN {protocol} ({iplimit} IP)</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"Server : <b>{server}</b>\n"
                 f"Limit  : <b>{iplimit} Device</b>\n\n"
                 f"Silakan masukkan <b>username</b>:\n"
-                f"<i>(⚠️ Username tidak boleh menggunakan huruf kapital/spasi. Gunakan huruf kecil & angka saja)</i>"
+                f"<i>(⚠️ Gunakan huruf kecil & angka saja, tanpa spasi/simbol)</i>"
             )
             keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "cancel_order"}]]}
             edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
@@ -702,10 +896,6 @@ def process_callback(callback_query):
             else:
                 try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={"callback_query_id": callback_query["id"], "text": "❌ Saldo tidak cukup! Silakan isi saldo minimal Rp 25.000.", "show_alert": True}, timeout=3)
                 except: pass
-
-    elif data == "menu_coming_soon":
-        try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={"callback_query_id": callback_query["id"], "text": "⚠️ Fitur ini sedang dalam tahap pengembangan.", "show_alert": True}, timeout=3)
-        except: pass
 
 def process_photo(message_data):
     chat_id = message_data["chat"]["id"]
@@ -772,7 +962,9 @@ def process_document(message_data):
     except: pass
     send_message_with_keyboard(chat_id, "⏳ <b>File berhasil dikirim!</b>\nMohon tunggu admin mengeceknya.")
 
-
+# ==========================================================
+# MESSAGE DISPATCHER & HANDLER
+# ==========================================================
 def process_message(text, chat_id, first_name, user_id):
     text = text.strip()
     get_user(user_id)
@@ -877,13 +1069,92 @@ def process_message(text, chat_id, first_name, user_id):
             send_message_with_keyboard(chat_id, f"✅ Limit maksimal server berhasil diubah menjadi <b>{text}</b> Akun.\nSilakan tekan /admin untuk mengecek menu.")
             return
 
+        elif state['step'] == 'renew_username':
+            target_acc = text.strip()
+            user_data = get_user(user_id)
+            # Search in multilogin or xray-users.db
+            found = False
+            proto_found = "SSH"
+            if os.path.exists(XRAY_DB):
+                with open(XRAY_DB, 'r') as f:
+                    for line in f:
+                        if line.startswith(f"{target_acc} |"):
+                            found = True
+                            parts = [p.strip() for p in line.split('|')]
+                            if len(parts) >= 4: proto_found = parts[3].upper()
+                            break
+            if not found and os.path.exists(f"/etc/premdigital/multilogin/{target_acc}"):
+                found = True
+                proto_found = "SSH"
+                
+            if not found:
+                send_message_with_keyboard(chat_id, f"❌ Akun <code>{target_acc}</code> tidak ditemukan di server!\nPastikan username benar.")
+                del USER_STATE[user_id]
+                return
+                
+            state['renew_user'] = target_acc
+            state['renew_proto'] = proto_found
+            state['step'] = 'renew_duration'
+            send_message_with_keyboard(chat_id, f"✅ Akun <b>{target_acc}</b> ({proto_found}) ditemukan!\n\nSilakan masukkan jumlah <b>hari perpanjangan</b> (Contoh: 30):")
+            return
+
+        elif state['step'] == 'renew_duration':
+            if not text.isdigit() or int(text) < 1 or int(text) > 365:
+                send_message_with_keyboard(chat_id, "❌ Masukkan angka valid (1 - 365 hari):")
+                return
+            days = int(text)
+            target_acc = state['renew_user']
+            proto_found = state['renew_proto']
+            user_data = get_user(user_id)
+            
+            p_hari = get_reseller_price("1") if user_data['role'] in ["RESELLER", "ADMIN"] else get_price_ip("1")
+            total_cost = days * p_hari
+            
+            if user_data['role'] not in ["ADMIN", "OWNER"] and user_data['balance'] < total_cost:
+                send_message_with_keyboard(chat_id, f"❌ Saldo tidak cukup!\nTotal: Rp {total_cost:,}\nSaldo: Rp {user_data['balance']:,}\nSilakan top up dulu.")
+                del USER_STATE[user_id]
+                return
+                
+            if user_data['role'] not in ["ADMIN", "OWNER"]:
+                db = load_db()
+                db[str(user_id)]["balance"] -= total_cost
+                save_db(db)
+                
+            new_exp = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
+            if proto_found == "SSH":
+                os.system(f"chage -E {new_exp} {target_acc} 2>/dev/null")
+            else:
+                # Update xray db
+                lines = []
+                if os.path.exists(XRAY_DB):
+                    with open(XRAY_DB, 'r') as f:
+                        for line in f:
+                            if line.startswith(f"{target_acc} |"):
+                                parts = [p.strip() for p in line.split('|')]
+                                if len(parts) >= 4:
+                                    lines.append(f"{parts[0]} | {parts[1]} | {new_exp} | {parts[3]}\n")
+                            else:
+                                lines.append(line)
+                    with open(XRAY_DB, 'w') as f:
+                        f.writelines(lines)
+            
+            send_message_with_keyboard(chat_id, f"✅ <b>PERPANJANG AKUN BERHASIL!</b>\n━━━━━━━━━━━━━━━━━━━━━━\n👤 Akun : <code>{target_acc}</code>\n🛠 Protokol : {proto_found}\n⏳ Ditambah : {days} Hari\n📅 Expired Baru : <b>{new_exp}</b>\n💰 Terpotong : Rp {total_cost:,}")
+            del USER_STATE[user_id]
+            return
+
         elif state['step'] == 'username':
             if text != text.lower() or not text.isalnum():
                 send_message_with_keyboard(chat_id, "❌ <b>Username tidak boleh menggunakan huruf kapital atau spasi.</b>\nGunakan huruf kecil dan angka saja.\n\nSilakan masukkan username kembali:")
                 return
             state['username'] = text
-            state['step'] = 'password'
-            send_message_with_keyboard(chat_id, "✅ <i>Username diterima.</i>\n\nSilakan masukkan <b>password</b>:\n<i>(⚠️ Sama seperti username, huruf kecil & angka saja)</i>")
+            protocol = state.get('protocol', 'SSH').upper()
+            
+            if protocol in ['VMESS', 'VLESS']:
+                state['step'] = 'duration'
+                send_message_with_keyboard(chat_id, f"✅ <i>Username diterima: <b>{text}</b></i>\n\nSilakan masukkan <b>masa aktif (hari)</b>:\n<i>Contoh: 30</i>")
+            else:
+                state['step'] = 'password'
+                send_message_with_keyboard(chat_id, "✅ <i>Username diterima.</i>\n\nSilakan masukkan <b>password</b>:\n<i>(⚠️ Sama seperti username, huruf kecil & angka saja)</i>")
             return
             
         elif state['step'] == 'password':
@@ -902,8 +1173,8 @@ def process_message(text, chat_id, first_name, user_id):
             
             hari = int(text)
             user_data = get_user(user_id)
-            
             iplimit = state.get('iplimit', '1')
+            protocol = state.get('protocol', 'SSH').upper()
             
             # Cek Harga berdasar role User/Reseller
             if user_data['role'] in ["RESELLER", "ADMIN"]:
@@ -928,51 +1199,136 @@ def process_message(text, chat_id, first_name, user_id):
             if loading_msg_id:
                 frames = ["⌛ <i>Memproses pesanan, mohon tunggu...</i>", "⏳ <i>Sedang membuat akun...</i>", "⌛ <i>Menyiapkan data server...</i>"]
                 for frame in frames:
-                    time.sleep(0.5)
+                    time.sleep(0.4)
                     edit_message_with_keyboard(chat_id, loading_msg_id, frame)
             else:
-                time.sleep(1.5)
+                time.sleep(1.0)
             
-            user_ssh = state['username']
-            pwd_ssh = state['password']
-            protocol = state['protocol']
+            acc_user = state['username']
+            acc_pwd = state.get('password', acc_user)
             ip_limit = iplimit
             kuota_gb = get_quota()
             
             try: exp_date = (datetime.now() + timedelta(days=hari)).strftime('%Y-%m-%d')
             except: exp_date = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
 
-            os.system(f'useradd -e {exp_date} -m -s /bin/false -M {user_ssh}')
-            os.system(f'echo "{user_ssh}:{pwd_ssh}" | chpasswd')
-            os.system('mkdir -p /etc/premdigital/multilogin /etc/premdigital/user_quota')
-            os.system(f'echo "{ip_limit}" > /etc/premdigital/multilogin/{user_ssh}')
-            os.system(f'echo "{kuota_gb}" > /etc/premdigital/user_quota/{user_ssh}')
-            
-            MSG = (
-                f"<b>✅ PEMBELIAN AKUN {protocol.upper()} BERHASIL</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👤 <b>Username :</b> <code>{user_ssh}</code>\n"
-                f"🔑 <b>Password :</b> <code>{pwd_ssh}</code>\n"
-                f"🌐 <b>Host/IP  :</b> <code>{DOMAIN}</code>\n"
-                f"⏳ <b>Durasi   :</b> {hari} Hari\n"
-                f"📅 <b>Expired  :</b> {exp_date}\n"
-                f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
-                f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<b>🔌 PORT LAYANAN:</b>\n"
-                f"▪️ TLS/SSL  : 443, 8443\n"
-                f"▪️ HTTP/WS  : 80, 8880, 2082\n"
-                f"▪️ OpenSSH  : 22, 2253\n"
-                f"▪️ Dropbear : 109, 143\n"
-                f"▪️ UDPGW    : 7100\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<b>📥 PAYLOAD WEBSOCKET:</b>\n"
-                f"<code>GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]</code>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━"
-            )
+            os.makedirs('/etc/premdigital/multilogin', exist_ok=True)
+            os.makedirs('/etc/premdigital/user_quota', exist_ok=True)
+            with open(f'/etc/premdigital/multilogin/{acc_user}', 'w') as f: f.write(str(ip_limit))
+            with open(f'/etc/premdigital/user_quota/{acc_user}', 'w') as f: f.write(str(kuota_gb))
+
+            if protocol == "SSH":
+                os.system(f'useradd -e {exp_date} -m -s /bin/false -M {acc_user}')
+                os.system(f'echo "{acc_user}:{acc_pwd}" | chpasswd')
+                MSG = (
+                    f"<b>✅ PEMBELIAN AKUN SSH BERHASIL</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Username :</b> <code>{acc_user}</code>\n"
+                    f"🔑 <b>Password :</b> <code>{acc_pwd}</code>\n"
+                    f"🌐 <b>Host/IP  :</b> <code>{DOMAIN}</code>\n"
+                    f"⏳ <b>Durasi   :</b> {hari} Hari\n"
+                    f"📅 <b>Expired  :</b> {exp_date}\n"
+                    f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
+                    f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"<b>🔌 PORT LAYANAN:</b>\n"
+                    f"▪️ TLS/SSL  : 443, 8443\n"
+                    f"▪️ HTTP/WS  : 80, 8880, 2082\n"
+                    f"▪️ OpenSSH  : 22, 2253\n"
+                    f"▪️ Dropbear : 109, 143\n"
+                    f"▪️ UDPGW    : 7100\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"<b>📥 PAYLOAD WEBSOCKET:</b>\n"
+                    f"<code>GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━"
+                )
+            elif protocol == "VMESS":
+                user_uuid = str(uuid.uuid4())
+                add_xray_client("vmess", acc_user, user_uuid)
+                record_xray_db(acc_user, user_uuid, exp_date, "vmess")
+                l_tls, l_ntls, l_grpc = generate_vmess_links(acc_user, user_uuid, DOMAIN)
+                MSG = (
+                    f"<b>✅ PEMBELIAN AKUN VMESS BERHASIL</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Username :</b> <code>{acc_user}</code>\n"
+                    f"🆔 <b>UUID     :</b> <code>{user_uuid}</code>\n"
+                    f"🌐 <b>Host/SNI :</b> <code>{DOMAIN}</code>\n"
+                    f"⏳ <b>Durasi   :</b> {hari} Hari\n"
+                    f"📅 <b>Expired  :</b> {exp_date}\n"
+                    f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
+                    f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔒 <b>1. VMESS WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
+                    f"🔓 <b>2. VMESS WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
+                    f"⚡ <b>3. VMESS gRPC (Port 443):</b>\n<code>{l_grpc}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━"
+                )
+            elif protocol == "VLESS":
+                user_uuid = str(uuid.uuid4())
+                add_xray_client("vless", acc_user, user_uuid)
+                record_xray_db(acc_user, user_uuid, exp_date, "vless")
+                l_tls, l_ntls, l_grpc = generate_vless_links(acc_user, user_uuid, DOMAIN)
+                MSG = (
+                    f"<b>✅ PEMBELIAN AKUN VLESS BERHASIL</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Username :</b> <code>{acc_user}</code>\n"
+                    f"🆔 <b>UUID     :</b> <code>{user_uuid}</code>\n"
+                    f"🌐 <b>Host/SNI :</b> <code>{DOMAIN}</code>\n"
+                    f"⏳ <b>Durasi   :</b> {hari} Hari\n"
+                    f"📅 <b>Expired  :</b> {exp_date}\n"
+                    f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
+                    f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔒 <b>1. VLESS WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
+                    f"🔓 <b>2. VLESS WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
+                    f"⚡ <b>3. VLESS gRPC (Port 443):</b>\n<code>{l_grpc}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━"
+                )
+            elif protocol == "TROJAN":
+                add_xray_client("trojan", acc_user, acc_pwd)
+                record_xray_db(acc_user, acc_pwd, exp_date, "trojan")
+                l_tls, l_ntls, l_grpc = generate_trojan_links(acc_user, acc_pwd, DOMAIN)
+                MSG = (
+                    f"<b>✅ PEMBELIAN AKUN TROJAN BERHASIL</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Username :</b> <code>{acc_user}</code>\n"
+                    f"🔑 <b>Password :</b> <code>{acc_pwd}</code>\n"
+                    f"🌐 <b>Host/SNI :</b> <code>{DOMAIN}</code>\n"
+                    f"⏳ <b>Durasi   :</b> {hari} Hari\n"
+                    f"📅 <b>Expired  :</b> {exp_date}\n"
+                    f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
+                    f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔒 <b>1. TROJAN WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
+                    f"🔓 <b>2. TROJAN WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
+                    f"⚡ <b>3. TROJAN gRPC (Port 443):</b>\n<code>{l_grpc}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━"
+                )
+
+            # Simpan riwayat akun ke db user
+            db = load_db()
+            uid_str = str(user_id)
+            if uid_str in db:
+                db[uid_str].setdefault("accounts", []).append({
+                    "username": acc_user,
+                    "protocol": protocol,
+                    "exp_date": exp_date,
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+                })
+                save_db(db)
+
             if loading_msg_id: edit_message_with_keyboard(chat_id, loading_msg_id, MSG)
             else: send_message_with_keyboard(chat_id, MSG)
             
@@ -980,7 +1336,7 @@ def process_message(text, chat_id, first_name, user_id):
                 f"📢 <b>NOTIFIKASI ORDER AKUN</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"👤 <b>Pelanggan :</b> <a href='tg://user?id={user_id}'>{first_name}</a>\n"
-                f"🛠 <b>Layanan   :</b> {protocol.upper()}\n"
+                f"🛠 <b>Layanan   :</b> {protocol}\n"
                 f"⏳ <b>Durasi    :</b> {hari} Hari\n"
                 f"📱 <b>Limit IP  :</b> {ip_limit} Device\n"
                 f"✅ <b>Status    :</b> Berhasil (Sukses)\n"
