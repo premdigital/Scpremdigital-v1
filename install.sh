@@ -1,4 +1,16 @@
 #!/bin/bash
+
+if [[ "$1" == "--update-menu" ]]; then
+    echo -e "\e[32mMendownload dan memperbarui menu...\e[0m"
+    wget -qO /tmp/temp-install.sh https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/install.sh
+    sed -n "/^cat > \/usr\/bin\/menu << 'END'/,/^END/p" /tmp/temp-install.sh | bash
+    sed -n "/^cat > \/usr\/bin\/menu-service << 'END'/,/^END/p" /tmp/temp-install.sh | bash
+    chmod +x /usr/bin/menu /usr/bin/menu-service
+    rm -f /tmp/temp-install.sh
+    echo -e "\e[32mMenu berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
+    exit 0
+fi
+
 # ==========================================
 # PREMDIGITAL - SSH & VPN AUTO INSTALLER V1
 # ==========================================
