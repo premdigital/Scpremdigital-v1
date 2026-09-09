@@ -52,8 +52,73 @@ BANNEREOF
     systemctl restart dropbear 2>/dev/null || true
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
 
+    # Perbaiki & Aktifkan Stunnel SSL Service (Port 8443)
+    echo -e "\e[33m[INFO] Memeriksa & Mengaktifkan Stunnel SSL...\e[0m"
+    if ! command -v stunnel4 >/dev/null 2>&1 && ! command -v stunnel >/dev/null 2>&1; then
+        apt-get update -y >/dev/null 2>&1
+        apt-get install -y stunnel4 >/dev/null 2>&1
+    fi
+    STUNNEL_BIN=$(command -v stunnel4 || command -v stunnel || echo "/usr/bin/stunnel4")
+    [ ! -f /usr/bin/stunnel4 ] && [ -f /usr/bin/stunnel ] && ln -sf /usr/bin/stunnel /usr/bin/stunnel4 2>/dev/null || true
+    [ ! -f /usr/bin/stunnel ] && [ -f /usr/bin/stunnel4 ] && ln -sf /usr/bin/stunnel4 /usr/bin/stunnel 2>/dev/null || true
+
+    mkdir -p /etc/stunnel
+    if [ ! -s /etc/stunnel/stunnel.pem ]; then
+        openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
+        -subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" \
+        -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem 2>/dev/null
+        chmod 600 /etc/stunnel/stunnel.pem 2>/dev/null
+        chown root:root /etc/stunnel/stunnel.pem 2>/dev/null
+    fi
+
+    cat > /etc/default/stunnel4 << 'END_STUNNEL_DEF'
+ENABLED=1
+FILES="/etc/stunnel/*.conf"
+OPTIONS=""
+END_STUNNEL_DEF
+
+    cat > /etc/stunnel/stunnel.conf << 'END_STUNNEL_CONF'
+cert = /etc/stunnel/stunnel.pem
+client = no
+socket = a:SO_REUSEADDR=1
+socket = l:TCP_NODELAY=1
+socket = r:TCP_NODELAY=1
+foreground = yes
+
+[openssh-tls]
+accept = 0.0.0.0:8443
+connect = 127.0.0.1:109
+END_STUNNEL_CONF
+
+    cat > /etc/systemd/system/stunnel4.service << EOF
+[Unit]
+Description=SSL/TLS Stunnel Service
+After=network.target dropbear.service
+
+[Service]
+Type=simple
+User=root
+ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp 2>/dev/null || true'
+ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
+Restart=always
+RestartSec=3
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    ln -sf /etc/systemd/system/stunnel4.service /etc/systemd/system/stunnel.service 2>/dev/null || true
+    fuser -k 8443/tcp 2>/dev/null || true
+    pkill -9 stunnel4 2>/dev/null || true
+    pkill -9 stunnel 2>/dev/null || true
+    systemctl daemon-reload
+    systemctl unmask stunnel4 stunnel 2>/dev/null || true
+    systemctl enable stunnel4 2>/dev/null || true
+    systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
+
     rm -f /tmp/temp-install.sh
-    echo -e "\e[32mMenu, Modul Xray & Banner PremDigital berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
+    echo -e "\e[32mMenu, Modul Xray, Banner & Stunnel SSL berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
     exit 0
 fi
 
@@ -438,27 +503,17 @@ systemctl restart ws-proxy
 # 7. Setting Stunnel (Port 8443)
 echo -e "\e[33m[INFO] Setting Stunnel...\e[0m"
 STUNNEL_BIN=$(command -v stunnel4 || command -v stunnel || echo "/usr/bin/stunnel4")
+[ ! -f /usr/bin/stunnel4 ] && [ -f /usr/bin/stunnel ] && ln -sf /usr/bin/stunnel /usr/bin/stunnel4 2>/dev/null || true
+[ ! -f /usr/bin/stunnel ] && [ -f /usr/bin/stunnel4 ] && ln -sf /usr/bin/stunnel4 /usr/bin/stunnel 2>/dev/null || true
 
 mkdir -p /etc/stunnel
-cat > /etc/stunnel/stunnel.conf << 'END'
-pid = /run/stunnel4.pid
-cert = /etc/stunnel/stunnel.pem
-client = no
-socket = a:SO_REUSEADDR=1
-socket = l:TCP_NODELAY=1
-socket = r:TCP_NODELAY=1
-
-[openssh-tls]
-accept = 0.0.0.0:8443
-connect = 127.0.0.1:700
-END
-
-openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
--subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" \
--out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem
-
-chmod 600 /etc/stunnel/stunnel.pem
-chown root:root /etc/stunnel/stunnel.pem
+if [ ! -s /etc/stunnel/stunnel.pem ]; then
+    openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
+    -subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" \
+    -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem 2>/dev/null
+    chmod 600 /etc/stunnel/stunnel.pem 2>/dev/null
+    chown root:root /etc/stunnel/stunnel.pem 2>/dev/null
+fi
 
 cat > /etc/default/stunnel4 << 'END'
 ENABLED=1
@@ -466,22 +521,43 @@ FILES="/etc/stunnel/*.conf"
 OPTIONS=""
 END
 
+cat > /etc/stunnel/stunnel.conf << 'END'
+cert = /etc/stunnel/stunnel.pem
+client = no
+socket = a:SO_REUSEADDR=1
+socket = l:TCP_NODELAY=1
+socket = r:TCP_NODELAY=1
+foreground = yes
+
+[openssh-tls]
+accept = 0.0.0.0:8443
+connect = 127.0.0.1:109
+END
+
 cat > /etc/systemd/system/stunnel4.service << EOF
 [Unit]
 Description=SSL/TLS Stunnel Service
-After=network.target
+After=network.target dropbear.service
 
 [Service]
-Type=forking
+Type=simple
+User=root
+ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp 2>/dev/null || true'
 ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
 Restart=always
 RestartSec=3
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+ln -sf /etc/systemd/system/stunnel4.service /etc/systemd/system/stunnel.service 2>/dev/null || true
+fuser -k 8443/tcp 2>/dev/null || true
+pkill -9 stunnel4 2>/dev/null || true
+pkill -9 stunnel 2>/dev/null || true
 systemctl daemon-reload
+systemctl unmask stunnel4 stunnel 2>/dev/null || true
 systemctl enable stunnel4 2>/dev/null || true
 systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
 
@@ -697,7 +773,7 @@ check_wsproxy() {
 }
 
 check_stunnel() {
-    if systemctl is-active --quiet stunnel4 2>/dev/null || systemctl is-active --quiet stunnel 2>/dev/null || pidof stunnel4 >/dev/null 2>&1 || pidof stunnel >/dev/null 2>&1; then
+    if systemctl is-active --quiet stunnel4 2>/dev/null || systemctl is-active --quiet stunnel 2>/dev/null || pgrep -x stunnel4 >/dev/null 2>&1 || pgrep -x stunnel >/dev/null 2>&1 || pidof stunnel4 >/dev/null 2>&1 || pidof stunnel >/dev/null 2>&1; then
         echo -e "${G}RUNNING${NC}"
     else
         echo -e "${R}STOPPED${NC}"
@@ -818,9 +894,10 @@ while true; do
     echo -e " [9] Restart Semua Service"
     echo -e " [10] Cek / Kelola Auto-Kill Multi-Login"
     echo -e " [11] Service Menu API & Bot"
+    echo -e " [12] Pengaturan Banner SSH"
     echo -e " [0] Keluar"
     echo -e "${C}======================================${NC}"
-    read -p " Pilih Opsi [0-11]: " opt
+    read -p " Pilih Opsi [0-12]: " opt
     case $opt in
         1)
             clear
@@ -1072,6 +1149,7 @@ while true; do
             echo -e "${Y}Merestart semua service tunneling...${NC}"
             systemctl restart ws-proxy 2>/dev/null
             systemctl restart xray 2>/dev/null
+            fuser -k 8443/tcp 2>/dev/null || true
             systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
             systemctl restart dropbear 2>/dev/null
             systemctl restart badvpn-udpgw 2>/dev/null
@@ -1082,7 +1160,7 @@ while true; do
             echo -e "${G}Semua service tunneling berhasil direstart!${NC}"
             sleep 1.5
             ;;
-        8)
+        12)
             clear
             echo -e "${C}======================================${NC}"
             echo -e "${Y}       PENGATURAN BANNER SSH          ${NC}"
@@ -1146,13 +1224,6 @@ END_MOTD
                 *)
                     ;;
             esac
-            ;;
-        9)
-            clear
-            echo -e "Menjalankan penghapusan akun expired..."
-            /usr/local/bin/auto-delete
-            echo -e "${G}Penghapusan akun expired selesai!${NC}"
-            sleep 1.5
             ;;
         10)
             clear

@@ -26,7 +26,16 @@ if [ -f /etc/stunnel/stunnel.conf ] && grep -q "4430" /etc/stunnel/stunnel.conf;
     echo -e "\e[33m[INFO] Membersihkan port 4430 dari konfigurasi Stunnel lama...\e[0m"
     sed -i '/\[ws-tls\]/,+2d' /etc/stunnel/stunnel.conf 2>/dev/null
     sed -i '/4430/d' /etc/stunnel/stunnel.conf 2>/dev/null
-    systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
+    # Jika stunnel.conf menjadi kosong atau rusak, pulihkan openssh-tls port 8443
+    if ! grep -q "openssh-tls" /etc/stunnel/stunnel.conf 2>/dev/null; then
+        cat >> /etc/stunnel/stunnel.conf << 'EOF'
+
+[openssh-tls]
+accept = 0.0.0.0:8443
+connect = 127.0.0.1:109
+EOF
+    fi
+    systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
 fi
 fuser -k 4430/tcp 2>/dev/null || true
 
