@@ -138,8 +138,21 @@ EOF
         fi
     fi
 
+    # Inisialisasi data Uptime & Masa Aktif VPS jika belum ada
+    mkdir -p /etc/premdigital
+    if [ ! -f /etc/premdigital/install_date.txt ]; then
+        if [ -f /etc/vps-domain.txt ]; then
+            stat -c %Y /etc/vps-domain.txt > /etc/premdigital/install_date.txt 2>/dev/null || date +%s > /etc/premdigital/install_date.txt
+        elif [ -f /etc/systemd/system/ws-proxy.service ]; then
+            stat -c %Y /etc/systemd/system/ws-proxy.service > /etc/premdigital/install_date.txt 2>/dev/null || date +%s > /etc/premdigital/install_date.txt
+        else
+            date +%s > /etc/premdigital/install_date.txt
+        fi
+    fi
+    [ ! -f /etc/premdigital/vps_duration_days.txt ] && echo "30" > /etc/premdigital/vps_duration_days.txt
+
     rm -f /tmp/temp-install.sh
-    echo -e "\e[32mMenu, Modul Xray, Banner, Stunnel SSL & Ookla Speedtest berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
+    echo -e "\e[32mMenu, Modul Xray, Banner, Stunnel SSL, Ookla Speedtest & Uptime berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
     exit 0
 fi
 
@@ -189,6 +202,15 @@ if [ -n "$ST_URL" ]; then
 fi
 if ! command -v speedtest >/dev/null 2>&1; then
     apt-get install -y speedtest-cli >/dev/null 2>&1 || true
+fi
+
+# Inisialisasi data Uptime & Masa Aktif VPS
+mkdir -p /etc/premdigital
+if [ ! -f /etc/premdigital/install_date.txt ]; then
+    date +%s > /etc/premdigital/install_date.txt
+fi
+if [ ! -f /etc/premdigital/vps_duration_days.txt ]; then
+    echo "30" > /etc/premdigital/vps_duration_days.txt
 fi
 
 # Matikan web server bawaan VPS & bebaskan port tunneling
@@ -885,6 +907,66 @@ get_bandwidth() {
     fi
 }
 
+get_uptime_info() {
+    local install_file="/etc/premdigital/install_date.txt"
+    local duration_file="/etc/premdigital/vps_duration_days.txt"
+    local now
+    now=$(date +%s)
+
+    if [ ! -f "$install_file" ]; then
+        mkdir -p /etc/premdigital
+        if [ -f /etc/vps-domain.txt ]; then
+            stat -c %Y /etc/vps-domain.txt > "$install_file" 2>/dev/null || echo "$now" > "$install_file"
+        elif [ -f /etc/systemd/system/ws-proxy.service ]; then
+            stat -c %Y /etc/systemd/system/ws-proxy.service > "$install_file" 2>/dev/null || echo "$now" > "$install_file"
+        else
+            echo "$now" > "$install_file"
+        fi
+    fi
+
+    local install_ts
+    install_ts=$(cat "$install_file" 2>/dev/null | tr -d '\r\n')
+    [[ "$install_ts" =~ ^[0-9]+$ ]] || install_ts=$now
+
+    local total_days=30
+    if [ -f "$duration_file" ]; then
+        local custom_days
+        custom_days=$(cat "$duration_file" 2>/dev/null | tr -d '\r\n')
+        [[ "$custom_days" =~ ^[0-9]+$ ]] && [ "$custom_days" -gt 0 ] && total_days=$custom_days
+    fi
+
+    local elapsed_sec=$((now - install_ts))
+    [ $elapsed_sec -lt 0 ] && elapsed_sec=0
+
+    local elapsed_days=$((elapsed_sec / 86400))
+    local elapsed_hours=$(((elapsed_sec % 86400) / 3600))
+    local elapsed_minutes=$(((elapsed_sec % 3600) / 60))
+
+    local elapsed_str=""
+    if [ $elapsed_days -gt 0 ]; then
+        elapsed_str="${elapsed_days} Hari, ${elapsed_hours} Jam"
+    elif [ $elapsed_hours -gt 0 ]; then
+        elapsed_str="${elapsed_hours} Jam, ${elapsed_minutes} Menit"
+    else
+        elapsed_str="${elapsed_minutes} Menit"
+    fi
+
+    local total_sec=$((total_days * 86400))
+    local remaining_sec=$((total_sec - elapsed_sec))
+
+    if [ $remaining_sec -le 0 ]; then
+        echo -e "${elapsed_str} (${R}Masa Aktif Habis / Expired${NC})"
+    else
+        local rem_days=$((remaining_sec / 86400))
+        local rem_hours=$(((remaining_sec % 86400) / 3600))
+        if [ $rem_days -gt 0 ]; then
+            echo -e "${elapsed_str} (${G}Sisa: ${rem_days} Hari${NC} / ${total_days} Hari)"
+        else
+            echo -e "${elapsed_str} (${Y}Sisa: ${rem_hours} Jam${NC} / ${total_days} Hari)"
+        fi
+    fi
+}
+
 while true; do
     IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     
@@ -913,6 +995,8 @@ while true; do
     fi
 
     BW_INFO=$(get_bandwidth "$ISP")
+    SWAP_INFO=$(free -m | awk '/Swap/{if($2>0) printf "%sMB", $2; else print "0MB"}')
+    UPTIME_INFO=$(get_uptime_info)
 
     clear
     echo -e "${C}======================================${NC}"
@@ -920,11 +1004,13 @@ while true; do
     echo -e "${C}======================================${NC}"
     echo -e " OS         : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
     echo -e " RAM        : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
+    echo -e " SWAP       : $SWAP_INFO"
     echo -e " Bandwidth  : $BW_INFO"
     echo -e " ISP        : $ISP"
     echo -e " Kota       : $CITY"
     echo -e " Domain     : ${Y}$DOMAIN${NC}"
     echo -e " IP VPS     : ${G}$IP${NC}"
+    echo -e " UPTIME     : $UPTIME_INFO"
     echo -e "${C}======================================${NC}"
     echo -e " [1] Buat Akun SSH"
     echo -e " [2] Buat Akun VMESS"
@@ -1153,9 +1239,10 @@ while true; do
             echo -e " [1] Set Kuota Bandwidth (Unlimited / Custom TB/GB)"
             echo -e " [2] Reset ke Auto-Detect Provider VPS"
             echo -e " [3] Speedtest VPS (Ookla)"
+            echo -e " [4] Atur Masa Aktif VPS (Default: 30 Hari)"
             echo -e " [0] Kembali ke Menu Utama"
             echo -e "${C}======================================${NC}"
-            read -p " Pilih Opsi [0-3]: " opt_bw
+            read -p " Pilih Opsi [0-4]: " opt_bw
             case $opt_bw in
                 1)
                     mkdir -p /etc/premdigital
@@ -1227,6 +1314,51 @@ while true; do
                     echo -e "${C}======================================${NC}"
                     echo ""
                     read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+                    ;;
+                4)
+                    clear
+                    echo -e "${C}======================================${NC}"
+                    echo -e "${Y}       ATUR MASA AKTIF VPS            ${NC}"
+                    echo -e "${C}======================================${NC}"
+                    cur_dur=30
+                    [ -f /etc/premdigital/vps_duration_days.txt ] && cur_dur=$(cat /etc/premdigital/vps_duration_days.txt | tr -d '\r\n')
+                    inst_date=""
+                    if [ -f /etc/premdigital/install_date.txt ]; then
+                        ts=$(cat /etc/premdigital/install_date.txt | tr -d '\r\n')
+                        inst_date=$(date -d "@$ts" "+%d-%m-%Y %H:%M" 2>/dev/null || date "+%d-%m-%Y")
+                    else
+                        inst_date=$(date "+%d-%m-%Y")
+                    fi
+                    echo -e " Tanggal Install VPS : ${G}$inst_date${NC}"
+                    echo -e " Masa Aktif Total    : ${Y}${cur_dur} Hari${NC}"
+                    echo -e " Status Uptime Saat  : $(get_uptime_info)"
+                    echo -e "--------------------------------------"
+                    echo -e " [1] Ubah Total Masa Aktif (misal: 30, 60, 90, 365)"
+                    echo -e " [2] Reset Tanggal Install ke Hari Ini"
+                    echo -e " [0] Batal"
+                    echo -e "${C}======================================${NC}"
+                    read -p " Pilih Opsi [0-2]: " opt_dur
+                    case $opt_dur in
+                        1)
+                            read -p " Masukkan Jumlah Hari Masa Aktif VPS: " new_days
+                            if [[ "$new_days" =~ ^[0-9]+$ ]] && [ "$new_days" -gt 0 ]; then
+                                mkdir -p /etc/premdigital
+                                echo "$new_days" > /etc/premdigital/vps_duration_days.txt
+                                echo -e "${G}Masa aktif VPS berhasil diubah menjadi $new_days Hari!${NC}"
+                            else
+                                echo -e "${R}Input tidak valid! Harus berupa angka positif.${NC}"
+                            fi
+                            sleep 1.5
+                            ;;
+                        2)
+                            mkdir -p /etc/premdigital
+                            date +%s > /etc/premdigital/install_date.txt
+                            echo -e "${G}Tanggal install VPS berhasil di-reset ke hari ini!${NC}"
+                            sleep 1.5
+                            ;;
+                        *)
+                            ;;
+                    esac
                     ;;
                 *)
                     ;;
