@@ -397,8 +397,7 @@ def process_callback(callback_query):
         parts = data.split("_")
         action = parts[1]
         protocol = parts[2].upper()
-
-isp = "Unknown ISP"; country = "Unknown"; country_code = "UN"
+        isp = "Unknown ISP"; country = "Unknown"; country_code = "UN"
         try:
             req_ip = requests.get("http://ip-api.com/json/", timeout=5).json()
             isp = req_ip.get("isp", "Unknown ISP")
@@ -561,7 +560,7 @@ isp = "Unknown ISP"; country = "Unknown"; country_code = "UN"
             )
             send_message_with_keyboard(GROUP_TESTI_ID, MSG_GROUP)
 
-        else:
+else:
             # Order Mode
             USER_STATE[user_id] = {'step': 'username', 'server': server, 'protocol': protocol, 'iplimit': iplimit}
             msg = (
@@ -784,7 +783,7 @@ def process_message(text, chat_id, first_name, user_id):
             send_message_with_keyboard(chat_id, "✅ <i>Username diterima.</i>\n\nSilakan masukkan <b>password</b>:\n<i>(⚠️ Sama seperti username, huruf kecil & angka saja)</i>")
             return
             
-           elif state['step'] == 'password':
+        elif state['step'] == 'password':
             if text != text.lower() or not text.isalnum():
                 send_message_with_keyboard(chat_id, "❌ <b>Password tidak boleh menggunakan huruf kapital atau spasi.</b>\nGunakan huruf kecil dan angka saja.\n\nSilakan masukkan password kembali:")
                 return
@@ -824,7 +823,6 @@ def process_message(text, chat_id, first_name, user_id):
                     edit_message_with_keyboard(chat_id, loading_msg_id, frame)
             else:
                 time.sleep(1.5)
-            
             user_ssh = state['username']
             pwd_ssh = state['password']
             protocol = state['protocol']
@@ -959,8 +957,8 @@ def process_message(text, chat_id, first_name, user_id):
                     else:
                         send_message_with_keyboard(chat_id, "❌ ID User tidak ditemukan di database.")
                 else: send_message_with_keyboard(chat_id, "❌ Format: <code>/delreseller [ID_USER]</code>")
-
-                elif text.startswith("/bc"):
+                    
+        elif text.startswith("/bc"):
             if str(user_id) == str(OWNER_ID):
                 pesan = text.replace("/bc ", "")
                 if pesan and pesan != "/bc":
