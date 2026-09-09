@@ -13,7 +13,7 @@ except:
 
 ADMIN_CONTACT = "t.me/T0M15"
 WEB_URL = "https://www.premdigital.web.id"
-VERSION = "v1.0 (PremDigital)"
+VERSION = "v1.0 { PremDigital }"
 OWNER_ID = "6010478011"
 GROUP_TESTI_ID = "-1004466282250" 
 
@@ -363,7 +363,6 @@ def process_callback(callback_query):
                         "show_alert": True
                     })
                     return
-            
             # --- ANIMASI LOADING JAM PASIR ---
             frames = [
                 "⏳ <i>Sedang memproses trial...</i>",
@@ -448,7 +447,8 @@ def process_callback(callback_query):
             )
             keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "cancel_order"}]]}
             edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
-            elif data == "menu_isi_saldo":
+
+    elif data == "menu_isi_saldo":
         msg = f"💰 <b>INPUT NOMINAL DEPOSIT</b>\n━━━━━━━━━━━━━━━━━━━━━━\nMetode: QRIS Otomatis\nLimit: Rp 1.000 - Rp 500.000\n\nSilakan ketik nominal deposit yang diinginkan.\nContoh: 10000"
         keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "back_to_main"}]]}
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
