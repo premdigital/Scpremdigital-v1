@@ -606,20 +606,20 @@ check_service() {
 }
 
 check_api() {
-    if ! systemctl is-active --quiet vps-api 2>/dev/null && ! pidof vps-api >/dev/null 2>&1; then
-        echo -e "${R}STOPPED${NC}"
-    elif grep -q 'API_SECRET = "PREMDIGITAL_RAHASIA_123"' /usr/local/bin/vps-api 2>/dev/null; then
+    if grep -qE "API_SECRET\s*=\s*['\"]PREMDIGITAL_RAHASIA_123['\"]" /usr/local/bin/vps-api 2>/dev/null; then
         echo -e "${Y}WAITING CONFIG${NC}"
+    elif ! systemctl is-active --quiet vps-api 2>/dev/null && ! pidof vps-api >/dev/null 2>&1; then
+        echo -e "${R}STOPPED${NC}"
     else
         echo -e "${G}RUNNING${NC}"
     fi
 }
 
 check_bot() {
-    if ! systemctl is-active --quiet vps-bot 2>/dev/null && ! pidof vps-bot >/dev/null 2>&1; then
-        echo -e "${R}STOPPED${NC}"
-    elif grep -q 'BOT_TOKEN = "ISI_TOKEN_BOT_DISINI"' /usr/local/bin/vps-bot 2>/dev/null; then
+    if grep -qE "BOT_TOKEN\s*=\s*['\"]ISI_TOKEN_BOT_DISINI['\"]" /usr/local/bin/vps-bot 2>/dev/null; then
         echo -e "${Y}WAITING TOKEN${NC}"
+    elif ! systemctl is-active --quiet vps-bot 2>/dev/null && ! pidof vps-bot >/dev/null 2>&1; then
+        echo -e "${R}STOPPED${NC}"
     else
         echo -e "${G}RUNNING${NC}"
     fi
