@@ -1,17 +1,27 @@
 #!/bin/bash
 
 if [[ "$1" == "--update-menu" ]]; then
-    echo -e "\e[32mMendownload dan memperbarui menu...\e[0m"
+    echo -e "\e[32mMendownload dan memperbarui menu & modul Xray...\e[0m"
     wget -qO /tmp/temp-install.sh https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/install.sh
     awk '/^cat > \/usr\/bin\/menu << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu
     awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
     chmod +x /usr/bin/menu /usr/bin/menu-service
+    
+    # Download modul xray setup & add akun
+    wget -qO /usr/local/bin/setup-xray https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/setup-xray.sh
     wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
     wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
     wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
-    chmod +x /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan
+    chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan
+    
+    # Inisialisasi Xray jika belum ada di VPS
+    if [ ! -f /usr/local/bin/xray ] || [ ! -s /etc/xray/config.json ]; then
+        echo -e "\e[33m[INFO] Menyiapkan Xray Core Engine di VPS...\e[0m"
+        bash /usr/local/bin/setup-xray
+    fi
+
     rm -f /tmp/temp-install.sh
-    echo -e "\e[32mMenu berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
+    echo -e "\e[32mMenu & Modul Xray berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
     exit 0
 fi
 
@@ -241,22 +251,43 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
             target_sock.connect(('127.0.0.1', tls_target_port))
             target_sock.sendall(data)
             first_client_packet = False
-        # 2. Deteksi Request HTTP / WebSocket Upgrade (HTTP Custom Payload)
+        # 2. Deteksi Request HTTP / WebSocket Upgrade (HTTP Custom Payload atau Xray)
         elif b'HTTP/' in data or b'Upgrade: websocket' in data or b'GET ' in data or b'POST ' in data or b'PATCH ' in data or b'HEAD ' in data:
-            target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            set_optimized_sock(target_sock)
-            target_sock.connect((target_host, target_port))
-            
-            # Ambil banner awal Dropbear langsung dari port SSH
-            target_sock.settimeout(6.0)
-            ssh_banner = target_sock.recv(1024)
-            if not ssh_banner:
-                return
-            
-            # Kirim respons 101 disusul banner SSH Dropbear ke HTTP Custom
-            client_sock.sendall(RESPONSE_101)
-            client_sock.sendall(ssh_banner)
-            first_client_packet = True
+            xray_port = None
+            if b'/vmess' in data:
+                xray_port = 10001
+            elif b'/vless' in data:
+                xray_port = 10002
+            elif b'/trojan' in data:
+                xray_port = 10003
+            elif b'/upvmess' in data:
+                xray_port = 10007
+            elif b'/upvless' in data:
+                xray_port = 10008
+            elif b'/uptrojan' in data:
+                xray_port = 10009
+
+            if xray_port:
+                target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                set_optimized_sock(target_sock)
+                target_sock.connect(('127.0.0.1', xray_port))
+                target_sock.sendall(data)
+                first_client_packet = False
+            else:
+                target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                set_optimized_sock(target_sock)
+                target_sock.connect((target_host, target_port))
+                
+                # Ambil banner awal Dropbear langsung dari port SSH
+                target_sock.settimeout(6.0)
+                ssh_banner = target_sock.recv(1024)
+                if not ssh_banner:
+                    return
+                
+                # Kirim respons 101 disusul banner SSH Dropbear ke HTTP Custom
+                client_sock.sendall(RESPONSE_101)
+                client_sock.sendall(ssh_banner)
+                first_client_packet = True
         # 3. Direct SSH Protocol biasa (SSH-2.0...)
         else:
             target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -373,7 +404,7 @@ systemctl daemon-reload
 systemctl enable ws-proxy
 systemctl restart ws-proxy
 
-# 7. Setting Stunnel (Port 4430 Internal & 8443)
+# 7. Setting Stunnel (Port 8443)
 echo -e "\e[33m[INFO] Setting Stunnel...\e[0m"
 STUNNEL_BIN=$(command -v stunnel4 || command -v stunnel || echo "/usr/bin/stunnel4")
 
@@ -385,10 +416,6 @@ client = no
 socket = a:SO_REUSEADDR=1
 socket = l:TCP_NODELAY=1
 socket = r:TCP_NODELAY=1
-
-[ws-tls]
-accept = 127.0.0.1:4430
-connect = 127.0.0.1:700
 
 [openssh-tls]
 accept = 0.0.0.0:8443
@@ -875,19 +902,31 @@ while true; do
             ;;
         2)
             clear
-            echo -e "Jalankan Script Buat Akun VMESS..."
+            if [ ! -f /usr/local/bin/add-vmess ]; then
+                echo -e "\e[33m[INFO] Mengunduh modul Buat Akun VMESS...\e[0m"
+                wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
+                chmod +x /usr/local/bin/add-vmess
+            fi
             /usr/local/bin/add-vmess
             read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
             ;;
         3)
             clear
-            echo -e "Jalankan Script Buat Akun VLESS..."
+            if [ ! -f /usr/local/bin/add-vless ]; then
+                echo -e "\e[33m[INFO] Mengunduh modul Buat Akun VLESS...\e[0m"
+                wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
+                chmod +x /usr/local/bin/add-vless
+            fi
             /usr/local/bin/add-vless
             read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
             ;;
         4)
             clear
-            echo -e "Jalankan Script Buat Akun TROJAN..."
+            if [ ! -f /usr/local/bin/add-trojan ]; then
+                echo -e "\e[33m[INFO] Mengunduh modul Buat Akun TROJAN...\e[0m"
+                wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
+                chmod +x /usr/local/bin/add-trojan
+            fi
             /usr/local/bin/add-trojan
             read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
             ;;
@@ -896,7 +935,29 @@ while true; do
             read -p "Masukkan Username yang mau dihapus: " user
             userdel -f $user 2>/dev/null
             rm -f "/etc/premdigital/multilogin/$user" 2>/dev/null
-            echo -e "${R}Akun $user berhasil dihapus.${NC}"
+            if [ -f /etc/xray/config.json ]; then
+                python3 - <<EOF
+import json
+try:
+    with open("/etc/xray/config.json", "r") as f:
+        data = json.load(f)
+    changed = False
+    for ib in data.get("inbounds", []):
+        clients = ib.get("settings", {}).get("clients", [])
+        new_clients = [c for c in clients if c.get("email") != "$user"]
+        if len(new_clients) != len(clients):
+            ib["settings"]["clients"] = new_clients
+            changed = True
+    if changed:
+        with open("/etc/xray/config.json", "w") as f:
+            json.dump(data, f, indent=2)
+except:
+    pass
+EOF
+                systemctl restart xray >/dev/null 2>&1
+            fi
+            sed -i "/^$user |/d" /etc/premdigital/xray-users.db 2>/dev/null
+            echo -e "${R}Akun $user berhasil dihapus (SSH & Xray).${NC}"
             sleep 1.5
             ;;
         6)
@@ -915,6 +976,17 @@ while true; do
                 fi
                 printf "%-14s %-12s %-10s\n" "$line" "$exp" "$limit"
             done
+            if [ -f /etc/premdigital/xray-users.db ] && [ -s /etc/premdigital/xray-users.db ]; then
+                echo ""
+                echo -e "${C}======================================${NC}"
+                echo -e "${Y}      LIST AKUN XRAY (VMESS/VLESS/TR) ${NC}"
+                echo -e "${C}======================================${NC}"
+                printf "%-14s %-12s %-10s\n" "USERNAME" "EXPIRED" "PROTOKOL"
+                echo -e "--------------------------------------"
+                while IFS=" | " read -r xuser xuuid xexp xproto; do
+                    [ -n "$xuser" ] && printf "%-14s %-12s %-10s\n" "$xuser" "$xexp" "$xproto"
+                done < /etc/premdigital/xray-users.db
+            fi
             echo -e "${C}======================================${NC}"
             echo ""
             read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
@@ -925,6 +997,7 @@ while true; do
             echo -e "${Y}    STATUS SERVICE & PORT TUNNELING   ${NC}"
             echo -e "${C}======================================${NC}"
             echo -e " • WebSocket Proxy    : $(check_wsproxy)"
+            echo -e " • Xray Core Engine   : $(check_service xray)"
             echo -e " • Stunnel SSL        : $(check_stunnel)"
             echo -e " • Dropbear SSH       : $(check_dropbear)"
             echo -e " • OpenSSH Server     : $(check_service ssh)"
@@ -1214,11 +1287,13 @@ done
 END
 chmod +x /usr/bin/menu-service
 
-# Helper Scripts: VMESS, VLESS, TROJAN
+# Helper Scripts: VMESS, VLESS, TROJAN & Xray Setup
+wget -qO /usr/local/bin/setup-xray https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/setup-xray.sh
 wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
 wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
 wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
-chmod +x /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan
+chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan
+bash /usr/local/bin/setup-xray
 
 # 14. Auto Delete Expired Accounts & Multi-Login Auto Kill (Max 2 IP)
 echo -e "\e[33m[INFO] Setting Auto Delete Expired & Multi-Login Auto Kill...\e[0m"
@@ -1237,6 +1312,30 @@ do
         fi
     fi
 done
+
+# Auto-delete Expired Xray Users
+if [ -f /etc/premdigital/xray-users.db ] && [ -f /etc/xray/config.json ]; then
+    while IFS=" | " read -r xuser xuuid xexp xproto; do
+        if [[ -n "$xuser" && "$xexp" < "$hariini" ]]; then
+            python3 - <<EOF
+import json
+try:
+    with open("/etc/xray/config.json", "r") as f:
+        data = json.load(f)
+    for ib in data.get("inbounds", []):
+        clients = ib.get("settings", {}).get("clients", [])
+        ib["settings"]["clients"] = [c for c in clients if c.get("email") != "$xuser"]
+    with open("/etc/xray/config.json", "w") as f:
+        json.dump(data, f, indent=2)
+except:
+    pass
+EOF
+            sed -i "/^$xuser |/d" /etc/premdigital/xray-users.db 2>/dev/null
+            systemctl restart xray >/dev/null 2>&1
+            echo "Akun Xray $xuser telah dihapus karena expired."
+        fi
+    done < /etc/premdigital/xray-users.db
+fi
 END
 chmod +x /usr/local/bin/auto-delete
 
@@ -1291,6 +1390,7 @@ echo -e " 🌍 Host / Domain : \e[32m$DOMAIN\e[0m"
 echo -e " 🌐 IP VPS        : \e[32m$MYIP\e[0m"
 echo -e "\e[36m----------------------------------------------------\e[0m"
 echo -e " 🔌 INFORMASI PORT TUNNELING:\e[0m"
+echo -e " • Xray VMESS / VLESS / TROJAN : \e[33m443 (TLS), 80 (NTLS)\e[0m"
 echo -e " • WebSocket Direct / CDN HTTP : \e[33m80, 8880, 2082\e[0m"
 echo -e " • WebSocket SSL / TLS (Multi) : \e[33m443, 8443\e[0m (Bisa tanpa TLS / pakai TLS)"
 echo -e " • Dropbear SSH                : \e[33m109, 143\e[0m"
