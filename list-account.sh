@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==========================================================
-# PremDigital - Script List Akun (Tabel SSH, VMESS, VLESS, TROJAN)
+# PremDigital - Script List Akun (SSH, VMESS, VLESS, TROJAN)
 # ==========================================================
 
 C="\e[1;36m"
@@ -14,9 +14,9 @@ XRAY_DB="/etc/premdigital/xray-users.db"
 touch "$XRAY_DB" 2>/dev/null
 HARI_INI=$(date +%Y-%m-%d)
 
-tabel_ssh() {
+list_ssh() {
     echo -e "${C}==================================================================${NC}"
-    echo -e "${Y}                     TABEL DAFTAR AKUN SSH                        ${NC}"
+    echo -e "${Y}                     DAFTAR AKUN SSH                              ${NC}"
     echo -e "${C}==================================================================${NC}"
     
     mapfile -t users < <(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd)
@@ -64,11 +64,11 @@ tabel_ssh() {
     echo -e " Total Akun SSH: ${Y}${#users[@]}${NC} (Aktif: ${G}${aktif_count}${NC} | Expired: ${R}${exp_count}${NC})"
 }
 
-tabel_xray() {
+list_xray() {
     proto="$1"
     proto_upper=$(echo "$proto" | tr '[:lower:]' '[:upper:]')
     echo -e "${C}==================================================================${NC}"
-    echo -e "${Y}                   TABEL DAFTAR AKUN ${proto_upper}                    ${NC}"
+    echo -e "${Y}                     DAFTAR AKUN ${proto_upper}                         ${NC}"
     echo -e "${C}==================================================================${NC}"
 
     declare -A user_exp
@@ -157,13 +157,13 @@ except:
 
 tampil_semua() {
     clear
-    tabel_ssh
+    list_ssh
     echo ""
-    tabel_xray "vmess"
+    list_xray "vmess"
     echo ""
-    tabel_xray "vless"
+    list_xray "vless"
     echo ""
-    tabel_xray "trojan"
+    list_xray "trojan"
     echo ""
     read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
 }
@@ -173,11 +173,11 @@ while true; do
     echo -e "${C}======================================${NC}"
     echo -e "${Y}        MENU LIST AKUN VPS            ${NC}"
     echo -e "${C}======================================${NC}"
-    echo -e " [1] List Tabel Akun SSH"
-    echo -e " [2] List Tabel Akun VMESS"
-    echo -e " [3] List Tabel Akun VLESS"
-    echo -e " [4] List Tabel Akun TROJAN"
-    echo -e " [5] Tampilkan Semua Tabel Protokol"
+    echo -e " [1] List Akun SSH"
+    echo -e " [2] List Akun VMESS"
+    echo -e " [3] List Akun VLESS"
+    echo -e " [4] List Akun TROJAN"
+    echo -e " [5] Tampilkan Semua Akun"
     echo -e " [0] Kembali ke Menu Utama"
     echo -e "${C}======================================${NC}"
     read -rp "Pilih Opsi [0-5]: " opt
@@ -185,25 +185,25 @@ while true; do
     case $opt in
         1)
             clear
-            tabel_ssh
+            list_ssh
             echo ""
             read -r -p "Tekan [Enter] untuk kembali..." dummy
             ;;
         2)
             clear
-            tabel_xray "vmess"
+            list_xray "vmess"
             echo ""
             read -r -p "Tekan [Enter] untuk kembali..." dummy
             ;;
         3)
             clear
-            tabel_xray "vless"
+            list_xray "vless"
             echo ""
             read -r -p "Tekan [Enter] untuk kembali..." dummy
             ;;
         4)
             clear
-            tabel_xray "trojan"
+            list_xray "trojan"
             echo ""
             read -r -p "Tekan [Enter] untuk kembali..." dummy
             ;;
