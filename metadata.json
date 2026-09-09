@@ -1,0 +1,6 @@
+{
+  "name": "Scpremdigital-v1",
+  "description": "Autoscript PremDigital Tunneling VPS Installer",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

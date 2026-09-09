@@ -6,6 +6,10 @@ if [[ "$1" == "--update-menu" ]]; then
     awk '/^cat > \/usr\/bin\/menu << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu
     awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
     chmod +x /usr/bin/menu /usr/bin/menu-service
+    wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
+    wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
+    wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
+    chmod +x /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan
     rm -f /tmp/temp-install.sh
     echo -e "\e[32mMenu berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
     exit 0
@@ -745,10 +749,10 @@ while true; do
     echo -e " Domain     : ${Y}$DOMAIN${NC}"
     echo -e " IP VPS     : ${G}$IP${NC}"
     echo -e "${C}======================================${NC}"
-    echo -e " [1] Buat Akun SSH Baru"
-    echo -e " [2] Buat Akun VMESS Baru"
-    echo -e " [3] Buat Akun VLESS Baru"
-    echo -e " [4] Buat Akun TROJAN Baru"
+    echo -e " [1] Buat Akun SSH"
+    echo -e " [2] Buat Akun VMESS"
+    echo -e " [3] Buat Akun VLESS"
+    echo -e " [4] Buat Akun TROJAN"
     echo -e " [5] Hapus Akun SSH/VPN"
     echo -e " [6] List Akun Aktif & Expired"
     echo -e " [7] Status Service & Port Tunneling"
@@ -1209,6 +1213,12 @@ while true; do
 done
 END
 chmod +x /usr/bin/menu-service
+
+# Helper Scripts: VMESS, VLESS, TROJAN
+wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
+wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
+wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
+chmod +x /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan
 
 # 14. Auto Delete Expired Accounts & Multi-Login Auto Kill (Max 2 IP)
 echo -e "\e[33m[INFO] Setting Auto Delete Expired & Multi-Login Auto Kill...\e[0m"
