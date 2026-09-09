@@ -3,8 +3,8 @@
 if [[ "$1" == "--update-menu" ]]; then
     echo -e "\e[32mMendownload dan memperbarui menu & modul Xray...\e[0m"
     wget -qO /tmp/temp-install.sh https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/install.sh
-    awk '/^cat > \/usr\/bin\/menu << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu
-    awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
+    awk '/^cat > \/usr\/bin\/menu << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu
+    awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
     chmod +x /usr/bin/menu /usr/bin/menu-service
     
     # Download modul xray setup, add akun, del akun, & list akun
@@ -16,9 +16,9 @@ if [[ "$1" == "--update-menu" ]]; then
     wget -qO /usr/local/bin/list-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/list-account.sh
     chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan /usr/local/bin/del-account /usr/local/bin/list-account
     
-    # Inisialisasi Xray jika belum ada di VPS
-    if [ ! -f /usr/local/bin/xray ] || [ ! -s /etc/xray/config.json ]; then
-        echo -e "\e[33m[INFO] Menyiapkan Xray Core Engine di VPS...\e[0m"
+    # Inisialisasi & Perbaiki Xray jika belum running atau belum ada
+    if ! systemctl is-active --quiet xray 2>/dev/null || [ ! -f /usr/local/bin/xray ]; then
+        echo -e "\e[33m[INFO] Menyiapkan & Memperbaiki Xray Core Engine di VPS...\e[0m"
         bash /usr/local/bin/setup-xray
     fi
 
@@ -1034,6 +1034,7 @@ while true; do
             clear
             echo -e "${Y}Merestart semua service tunneling...${NC}"
             systemctl restart ws-proxy 2>/dev/null
+            systemctl restart xray 2>/dev/null
             systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
             systemctl restart dropbear 2>/dev/null
             systemctl restart badvpn-udpgw 2>/dev/null

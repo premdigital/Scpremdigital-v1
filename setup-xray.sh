@@ -8,8 +8,10 @@ if [ "${EUID}" -ne 0 ]; then
     exit 1
 fi
 
-echo -e "\e[33m[INFO] Menyiapkan Direktori & Sertifikat Xray...\e[0m"
-mkdir -p /etc/xray /var/log/xray /etc/premdigital/xray
+echo -e "\e[33m[INFO] Menyiapkan Direktori & File Pendukung Xray...\e[0m"
+mkdir -p /etc/xray /var/log/xray /usr/local/share/xray /etc/premdigital/xray
+touch /var/log/xray/access.log /var/log/xray/error.log 2>/dev/null
+chmod 644 /var/log/xray/*.log 2>/dev/null
 
 # Deteksi Domain VPS
 if [ -f /etc/vps-domain.txt ]; then
@@ -19,46 +21,65 @@ else
     echo "$domain" > /etc/vps-domain.txt
 fi
 
-# Buat Sertifikat SSL untuk Xray jika belum ada
-if [ ! -f /etc/xray/xray.crt ] || [ ! -f /etc/xray/xray.key ]; then
-    if [ -f /etc/stunnel/stunnel.pem ]; then
-        cp -f /etc/stunnel/stunnel.pem /etc/xray/xray.crt
-        cp -f /etc/stunnel/stunnel.pem /etc/xray/xray.key
-    else
-        openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
-        -subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=$domain" \
-        -out /etc/xray/xray.crt -keyout /etc/xray/xray.key 2>/dev/null
-    fi
+# Bebaskan Port 4430 dari konflik Stunnel / proses lama
+if [ -f /etc/stunnel/stunnel.conf ] && grep -q "4430" /etc/stunnel/stunnel.conf; then
+    echo -e "\e[33m[INFO] Membersihkan port 4430 dari konfigurasi Stunnel lama...\e[0m"
+    sed -i '/\[ws-tls\]/,+2d' /etc/stunnel/stunnel.conf 2>/dev/null
+    sed -i '/4430/d' /etc/stunnel/stunnel.conf 2>/dev/null
+    systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
+fi
+fuser -k 4430/tcp 2>/dev/null || true
+
+# Buat Sertifikat SSL untuk Xray jika belum ada atau kosong
+if [ ! -s /etc/xray/xray.crt ] || [ ! -s /etc/xray/xray.key ]; then
+    echo -e "\e[33m[INFO] Menghasilkan Sertifikat SSL baru untuk Xray...\e[0m"
+    openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
+    -subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=$domain" \
+    -out /etc/xray/xray.crt -keyout /etc/xray/xray.key 2>/dev/null
     chmod 644 /etc/xray/xray.crt 2>/dev/null
     chmod 600 /etc/xray/xray.key 2>/dev/null
 fi
 
-# Download Xray Core jika belum ada
-if [ ! -f /usr/local/bin/xray ]; then
+# Download & Pasang Xray Core jika belum ada atau rusak
+if ! /usr/local/bin/xray version >/dev/null 2>&1; then
     echo -e "\e[33m[INFO] Mengunduh Xray Core Official...\e[0m"
     arch=$(uname -m)
     xray_arch="64"
     if [ "$arch" == "aarch64" ] || [ "$arch" == "arm64" ]; then
         xray_arch="arm64-v8a"
+    elif [ "$arch" == "armv7l" ]; then
+        xray_arch="arm32-v7a"
     fi
     
-    apt-get install -y unzip curl wget python3 >/dev/null 2>&1
-    wget -qO /tmp/xray.zip "https://github.com/XTLS/Xray-core/releases/download/v1.8.24/Xray-linux-${xray_arch}.zip"
-    if [ -f /tmp/xray.zip ]; then
-        unzip -o /tmp/xray.zip -d /usr/local/bin/ xray >/dev/null 2>&1
+    apt-get update -y >/dev/null 2>&1
+    apt-get install -y unzip curl wget python3 psmisc >/dev/null 2>&1
+    
+    rm -f /tmp/xray.zip
+    wget -qO /tmp/xray.zip "https://github.com/XTLS/Xray-core/releases/download/v1.8.24/Xray-linux-${xray_arch}.zip" || \
+    curl -sSL "https://github.com/XTLS/Xray-core/releases/download/v1.8.24/Xray-linux-${xray_arch}.zip" -o /tmp/xray.zip
+    
+    if [ -s /tmp/xray.zip ]; then
+        mkdir -p /tmp/xray_extract
+        unzip -o /tmp/xray.zip -d /tmp/xray_extract/ >/dev/null 2>&1
+        cp -f /tmp/xray_extract/xray /usr/local/bin/xray 2>/dev/null
+        cp -f /tmp/xray_extract/*.dat /usr/local/share/xray/ 2>/dev/null
+        cp -f /tmp/xray_extract/*.dat /usr/local/bin/ 2>/dev/null
         chmod +x /usr/local/bin/xray
-        rm -f /tmp/xray.zip
+        rm -rf /tmp/xray.zip /tmp/xray_extract
+    fi
+
+    # Fallback ke installer resmi jika masih belum terpasang
+    if ! /usr/local/bin/xray version >/dev/null 2>&1; then
+        echo -e "\e[33m[INFO] Menggunakan fallback installer resmi XTLS...\e[0m"
+        bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install >/dev/null 2>&1
     fi
 fi
 
-# Buat Base Config Xray jika belum ada atau kosong
-if [ ! -s /etc/xray/config.json ]; then
-    echo -e "\e[33m[INFO] Mengonfigurasi /etc/xray/config.json...\e[0m"
+# Fungsi untuk membuat template /etc/xray/config.json
+generate_default_config() {
     cat > /etc/xray/config.json << 'EOF'
 {
   "log": {
-    "access": "/var/log/xray/access.log",
-    "error": "/var/log/xray/error.log",
     "loglevel": "warning"
   },
   "inbounds": [
@@ -233,6 +254,21 @@ if [ ! -s /etc/xray/config.json ]; then
   ]
 }
 EOF
+}
+
+# Buat Base Config Xray jika belum ada atau kosong
+if [ ! -s /etc/xray/config.json ]; then
+    echo -e "\e[33m[INFO] Mengonfigurasi /etc/xray/config.json...\e[0m"
+    generate_default_config
+fi
+
+# Cek validitas config.json dengan Xray test
+if command -v /usr/local/bin/xray >/dev/null 2>&1; then
+    if ! /usr/local/bin/xray -test -config /etc/xray/config.json >/dev/null 2>&1; then
+        echo -e "\e[31m[PERINGATAN] Format config.json lama bermasalah, meregenerasi default...\e[0m"
+        cp -f /etc/xray/config.json /etc/xray/config.json.corrupt 2>/dev/null
+        generate_default_config
+    fi
 fi
 
 # Buat Service Systemd untuk Xray
@@ -240,13 +276,16 @@ cat > /etc/systemd/system/xray.service << 'EOF'
 [Unit]
 Description=Xray Service PremDigital
 Documentation=https://github.com/xtls
-After=network.target
+After=network.target nss-lookup.target
 
 [Service]
 User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
 ExecStart=/usr/local/bin/xray run -config /etc/xray/config.json
-Restart=on-failure
-RestartPreventExitStatus=23
+Restart=always
+RestartSec=3s
 LimitNPROC=10000
 LimitNOFILE=1000000
 
@@ -256,6 +295,12 @@ EOF
 
 systemctl daemon-reload
 systemctl enable xray >/dev/null 2>&1
-systemctl restart xray >/dev/null 2>&1
+systemctl restart xray
+sleep 1.5
 
-echo -e "\e[32m[INFO] Xray Core & Service berhasil disiapkan!\e[0m"
+if systemctl is-active --quiet xray; then
+    echo -e "\e[32m[INFO] Xray Core & Service BERHASIL berjalan (RUNNING)!\e[0m"
+else
+    echo -e "\e[31m[ERROR] Xray belum berjalan, memeriksa log error...\e[0m"
+    journalctl -u xray -n 10 --no-pager
+fi
