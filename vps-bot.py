@@ -13,21 +13,25 @@ except:
 
 ADMIN_CONTACT = "t.me/T0M15"
 WEB_URL = "https://www.premdigital.web.id"
-VERSION = "v1.2 { PremDigital }"
+VERSION = "v1.5 { PremDigital }"
 OWNER_ID = "6010478011"
 GROUP_TESTI_ID = "-1004466282250" 
 
 TRIAL_SETTING_FILE = "/etc/premdigital/trial_setting.txt"
 TRIAL_LIMIT_FILE = "/etc/premdigital/trial_limit.txt"
 SERVER_LIMIT_FILE = "/etc/premdigital/server_limit.txt"
-PRICE_USER_FILE = "/etc/premdigital/price_user.txt"
-PRICE_RESELLER_FILE = "/etc/premdigital/price_reseller.txt"
+
+# File Harga per IP
+PRICE_IP1_FILE = "/etc/premdigital/price_ip1.txt"
+PRICE_IP2_FILE = "/etc/premdigital/price_ip2.txt"
+PRICE_IP3_FILE = "/etc/premdigital/price_ip3.txt"
+PRICE_IP5_FILE = "/etc/premdigital/price_ip5.txt"
+
 DB_FILE = "/etc/premdigital/users_db.json"
 QRIS_IMAGE_URL = "https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/qris.jpg"
 
 USER_STATE = {}
 
-# --- FUNGSI DATABASE USER ---
 def load_db():
     if not os.path.exists(DB_FILE):
         os.makedirs('/etc/premdigital', exist_ok=True)
@@ -50,7 +54,6 @@ def get_user(user_id):
         save_db(db)
     return db[uid]
 
-# --- FUNGSI MANAJEMEN SETTING ---
 def get_trial_duration():
     try:
         with open(TRIAL_SETTING_FILE, 'r') as f: return f.read().strip()
@@ -84,23 +87,21 @@ def set_server_limit(limit):
         with open(SERVER_LIMIT_FILE, 'w') as f: f.write(str(limit))
     except: pass
 
-def get_price(role):
+def get_price_ip(limit):
+    paths = {"1": PRICE_IP1_FILE, "2": PRICE_IP2_FILE, "3": PRICE_IP3_FILE, "5": PRICE_IP5_FILE}
+    defs = {"1": 200, "2": 400, "3": 600, "5": 1000}
     try:
-        if role in ["RESELLER", "ADMIN"]:
-            with open(PRICE_RESELLER_FILE, 'r') as f: return int(f.read().strip())
-        else:
-            with open(PRICE_USER_FILE, 'r') as f: return int(f.read().strip())
+        with open(paths[str(limit)], 'r') as f: return int(f.read().strip())
     except:
-        return 150 if role in ["RESELLER", "ADMIN"] else 200
+        return defs.get(str(limit), 200)
 
-def set_price(role, price):
+def set_price_ip(limit, price):
+    paths = {"1": PRICE_IP1_FILE, "2": PRICE_IP2_FILE, "3": PRICE_IP3_FILE, "5": PRICE_IP5_FILE}
     try:
         os.makedirs('/etc/premdigital', exist_ok=True)
-        file_path = PRICE_RESELLER_FILE if role == "RESELLER" else PRICE_USER_FILE
-        with open(file_path, 'w') as f: f.write(str(price))
+        with open(paths[str(limit)], 'w') as f: f.write(str(price))
     except: pass
 
-# --- FUNGSI TELEGRAM BOT API ---
 def send_message_with_keyboard(chat_id, text, reply_markup=None):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
@@ -192,7 +193,7 @@ def get_admin_menu_keyboard():
             [{"text": "🌟 Tambah Reseller", "callback_data": "admin_add_reseller"}],
             [{"text": "📢 Broadcast Pesan", "callback_data": "admin_broadcast"}],
             [{"text": "⚙️ Pengaturan Trial", "callback_data": "admin_trial_setting"}],
-            [{"text": "⚙️ Pengaturan Harga", "callback_data": "admin_price_setting"}],
+            [{"text": "⚙️ Pengaturan Harga IP", "callback_data": "admin_price_setting"}],
             [{"text": "⚙️ Limit Max Server", "callback_data": "admin_server_limit"}],
             [{"text": "🔙 Kembali ke Main Menu", "callback_data": "back_to_main"}]
         ]
@@ -221,19 +222,23 @@ def render_admin_trial_setting(chat_id, message_id):
     edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
 def render_admin_price_setting(chat_id, message_id):
-    p_user = get_price("USER")
-    p_reseller = get_price("RESELLER")
+    p1 = get_price_ip("1"); p2 = get_price_ip("2")
+    p3 = get_price_ip("3"); p5 = get_price_ip("5")
     msg = (
-        f"⚙️ <b>PENGATURAN HARGA VPN</b>\n"
+        f"⚙️ <b>PENGATURAN HARGA VPN (PER HARI)</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 <b>Harga Normal (User) :</b> Rp {p_user}/hari\n"
-        f"🌟 <b>Harga Reseller      :</b> Rp {p_reseller}/hari\n\n"
-        f"<i>Pilih harga yang ingin diubah:</i>"
+        f"📱 <b>Harga 1 IP :</b> Rp {p1}\n"
+        f"📱 <b>Harga 2 IP :</b> Rp {p2}\n"
+        f"📱 <b>Harga 3 IP :</b> Rp {p3}\n"
+        f"📱 <b>Harga 5 IP :</b> Rp {p5}\n\n"
+        f"<i>Pilih limit IP yang ingin diubah harganya:</i>"
     )
     keyboard = {
         "inline_keyboard": [
-            [{"text": "✏️ Ubah Harga User", "callback_data": "set_price_USER"}],
-            [{"text": "✏️ Ubah Harga Reseller", "callback_data": "set_price_RESELLER"}],
+            [{"text": "✏️ Ubah Harga 1 IP", "callback_data": "set_price_ip_1"}],
+            [{"text": "✏️ Ubah Harga 2 IP", "callback_data": "set_price_ip_2"}],
+            [{"text": "✏️ Ubah Harga 3 IP", "callback_data": "set_price_ip_3"}],
+            [{"text": "✏️ Ubah Harga 5 IP", "callback_data": "set_price_ip_5"}],
             [{"text": "🔙 Kembali", "callback_data": "back_to_admin"}]
         ]
     }
@@ -308,8 +313,7 @@ def process_callback(callback_query):
             
         edit_message_caption(chat_id, message_id, f"❌ <b>DEPOSIT DITOLAK</b>\n━━━━━━━━━━━━━━━━━━━━━━\nDeposit Rp {amount} dari User ID <code>{target_id}</code> telah Anda tolak.")
         send_message_with_keyboard(target_id, f"❌ <b>DEPOSIT DITOLAK</b>\n━━━━━━━━━━━━━━━━━━━━━━\nMaaf, pengajuan deposit Anda sebesar Rp {amount} <b>Ditolak oleh Admin</b> karena bukti transfer tidak valid. Silakan hubungi admin jika ini kesalahan.")
-
-    # --- ADMIN MENU ---
+# --- ADMIN MENU ---
     elif data == "back_to_admin":
         if user_id in USER_STATE: del USER_STATE[user_id]
         msg = get_admin_menu_text()
@@ -317,7 +321,7 @@ def process_callback(callback_query):
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
     elif data == "admin_add_saldo":
-        msg = "💰 <b>TAMBAH SALDO USER</b>\n━━━━━━━━━━━━━━━━━━━━━━\nUntuk menambah saldo manual, ketik:\n<code>/addsaldo [ID_USER] [JUMLAH]</code>\nContoh: <code>/addsaldo 123456789 50000</code>"
+        msg = "💰 <b>TAMBAH SALDO USER</b>\n━━━━━━━━━━━━━━━━━━━━━━\nKetik perintah ini untuk menambah saldo (otomatis ke akun user):\n<code>/addsaldo [ID_USER] [JUMLAH]</code>\n\nAtau jika ingin <b>mengisi saldo ke akun Anda sendiri</b>, cukup ketik:\n<code>/addsaldo [JUMLAH]</code>"
         keyboard = {"inline_keyboard": [[{"text": "🔙 Kembali", "callback_data": "back_to_admin"}]]}
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
@@ -340,10 +344,10 @@ def process_callback(callback_query):
     elif data == "admin_server_limit":
         render_admin_server_limit(chat_id, message_id)
 
-    elif data.startswith("set_price_"):
-        role_target = data.replace("set_price_", "")
-        USER_STATE[user_id] = {'step': f'input_price_{role_target}'}
-        msg = f"✍️ <b>INPUT HARGA {role_target}</b>\n━━━━━━━━━━━━━━━━━━━━━━\nSilakan ketik harga per hari (dalam Rupiah) untuk akun tipe {role_target}.\nContoh: 150"
+    elif data.startswith("set_price_ip_"):
+        ip_target = data.replace("set_price_ip_", "")
+        USER_STATE[user_id] = {'step': f'input_price_ip_{ip_target}'}
+        msg = f"✍️ <b>INPUT HARGA {ip_target} IP</b>\n━━━━━━━━━━━━━━━━━━━━━━\nSilakan ketik harga per hari (dalam Rupiah) untuk limit {ip_target} IP.\nContoh: 200"
         keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "admin_price_setting"}]]}
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
@@ -383,6 +387,7 @@ def process_callback(callback_query):
             ]
         }
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
+
     elif data.startswith("select_"):
         parts = data.split("_")
         action = parts[1]
@@ -401,32 +406,58 @@ def process_callback(callback_query):
             if not ping_ms: ping_ms = "30"
         except: ping_ms = "30"
             
-        server_code = f"{country_code}-{isp[:3].upper().replace(' ', '')}-1IP"
+        server_code = f"{country_code}-{isp[:3].upper().replace(' ', '')}"
         
         try: current_acc = int(subprocess.getoutput("ls -1 /etc/premdigital/multilogin 2>/dev/null | wc -l"))
         except: current_acc = 0
         max_limit = get_server_limit()
         
-        p_user = get_price("USER")
-        p_reseller = get_price("RESELLER")
+        if action == "order":
+            p1 = get_price_ip("1")
+            p2 = get_price_ip("2")
+            p3 = get_price_ip("3")
+            p5 = get_price_ip("5")
+            
+            msg = (
+                f"🌐 <b>{server_code}</b>\n"
+                f"📍 Lokasi: {country}\n"
+                f"📡 ISP: {isp}\n"
+                f"⚡ Ping: {ping_ms} ms 🟢\n"
+                f"📊 Quota: Unlimited\n"
+                f"👥 Total Akun: {current_acc}/{max_limit}\n\n"
+                f"<b>💰 DAFTAR HARGA:</b>\n"
+                f"▪️ 1 IP = Rp {p1} / Hari\n"
+                f"▪️ 2 IP = Rp {p2} / Hari\n"
+                f"▪️ 3 IP = Rp {p3} / Hari\n"
+                f"▪️ 5 IP = Rp {p5} / Hari\n\n"
+                f"<i>Silakan pilih Limit IP untuk melanjutkan:</i>"
+            )
+            keyboard = {
+                "inline_keyboard": [
+                    [{"text": "📱 1 IP", "callback_data": f"do_{action}_{protocol}_{server_code}_1"},
+                     {"text": "📱 2 IP", "callback_data": f"do_{action}_{protocol}_{server_code}_2"}],
+                    [{"text": "📱 3 IP", "callback_data": f"do_{action}_{protocol}_{server_code}_3"},
+                     {"text": "📱 5 IP", "callback_data": f"do_{action}_{protocol}_{server_code}_5"}],
+                    [{"text": "🔙 Kembali", "callback_data": f"menu_{action}_akun"}]
+                ]
+            }
+        else: # trial mode
+            msg = (
+                f"🌐 <b>{server_code}</b>\n"
+                f"📍 Lokasi: {country}\n"
+                f"📡 ISP: {isp}\n"
+                f"⚡ Ping: {ping_ms} ms 🟢\n"
+                f"📊 Quota: Unlimited\n"
+                f"👥 Total Akun: {current_acc}/{max_limit}\n\n"
+                f"<i>Silakan klik tombol di bawah untuk membuat Trial (Limit 1 IP):</i>"
+            )
+            keyboard = {
+                "inline_keyboard": [
+                    [{"text": "🆓 Buat Trial Akun (1 IP)", "callback_data": f"do_{action}_{protocol}_{server_code}_1"}],
+                    [{"text": "🔙 Kembali", "callback_data": f"menu_{action}_akun"}]
+                ]
+            }
 
-        msg = (
-            f"🌐 <b>{server_code}</b>\n"
-            f"📍 Lokasi: {country}\n"
-            f"📡 ISP: {isp}\n"
-            f"⚡ Ping: {ping_ms} ms 🟢\n"
-            f"💰 Harga Normal: Rp{p_user}/hari\n"
-            f"🌟 Harga Reseller: Rp{p_reseller}/hari\n"
-            f"📊 Quota: Unlimited\n"
-            f"👥 Total Create Akun: {current_acc}/{max_limit}\n"
-        )
-        
-        keyboard = {
-            "inline_keyboard": [
-                [{"text": server_code, "callback_data": f"do_{action}_{protocol}_{server_code}"}],
-                [{"text": "🔙 Kembali", "callback_data": f"menu_{action}_akun"}]
-            ]
-        }
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
     elif data.startswith("do_"):
@@ -434,6 +465,7 @@ def process_callback(callback_query):
         action = parts[1]
         protocol = parts[2]
         server = parts[3]
+        iplimit = parts[4] if len(parts) > 4 else "1"
         
         user_id_str = str(user_id)
         db = load_db()
@@ -525,11 +557,13 @@ def process_callback(callback_query):
             send_message_with_keyboard(GROUP_TESTI_ID, MSG_GROUP)
 
         else:
-            USER_STATE[user_id] = {'step': 'username', 'server': server, 'protocol': protocol}
+            # Order Mode
+            USER_STATE[user_id] = {'step': 'username', 'server': server, 'protocol': protocol, 'iplimit': iplimit}
             msg = (
-                f"📝 <b>PEMBUATAN AKUN {protocol.upper()}</b>\n"
+                f"📝 <b>PEMBUATAN AKUN {protocol.upper()} ({iplimit} IP)</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"Server : <b>{server}</b>\n\n"
+                f"Server : <b>{server}</b>\n"
+                f"Limit  : <b>{iplimit} Device</b>\n\n"
                 f"Silakan masukkan <b>username</b>:\n"
                 f"<i>(⚠️ Username tidak boleh menggunakan huruf kapital/spasi. Gunakan huruf kecil & angka saja)</i>"
             )
@@ -537,7 +571,6 @@ def process_callback(callback_query):
             edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
     elif data == "menu_isi_saldo":
-        # ANTI-SPAM PENDING TOPUP CHECK
         if user_id in USER_STATE and USER_STATE[user_id].get('step') == 'topup_pending':
             requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={"callback_query_id": callback_query["id"], "text": "⚠️ Anda masih memiliki pengajuan top up yang belum dikonfirmasi Admin. Mohon tunggu.", "show_alert": True})
             return
@@ -586,8 +619,7 @@ def process_callback(callback_query):
 
     elif data == "menu_coming_soon":
         requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={"callback_query_id": callback_query["id"], "text": "⚠️ Fitur ini sedang dalam tahap pengembangan.", "show_alert": True})
-
-def process_photo(message_data):
+        def process_photo(message_data):
     chat_id = message_data["chat"]["id"]
     first_name = message_data["chat"].get("first_name", "User")
     user_id = message_data["from"]["id"]
@@ -616,7 +648,6 @@ def process_photo(message_data):
                 [{"text": "❌ Tolak", "callback_data": f"rej_topup_{user_id}_{nominal}"}]
             ]
         }
-        # Kunci user agar tidak bisa spam, sampai admin klik setuju/tolak
         USER_STATE[user_id]['step'] = 'topup_pending'
     else:
         caption = (
@@ -633,11 +664,8 @@ def process_document(message_data):
     chat_id = message_data["chat"]["id"]
     first_name = message_data["chat"].get("first_name", "User")
     user_id = message_data["from"]["id"]
-    
     doc_file_id = message_data["document"]["file_id"]
-    
     caption = f"📁 <b>KIRIMAN DOKUMEN DARI USER</b>\n👤 Dari: <a href='tg://user?id={user_id}'>{first_name}</a>\n🆔 ID: <code>{user_id}</code>"
-    
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument", json={"chat_id": OWNER_ID, "document": doc_file_id, "caption": caption, "parse_mode": "HTML"})
     send_message_with_keyboard(chat_id, "⏳ <b>File berhasil dikirim!</b>\nMohon tunggu admin mengeceknya.")
 
@@ -649,18 +677,15 @@ def process_message(text, chat_id, first_name, user_id):
     if user_id in USER_STATE and not text.startswith("/"):
         state = USER_STATE[user_id]
         
-        # --- PROSES INPUT HARGA ADMIN ---
-        if state['step'].startswith('input_price_'):
+        # --- PROSES INPUT HARGA IP ADMIN ---
+        if state['step'].startswith('input_price_ip_'):
             if not text.isdigit():
                 send_message_with_keyboard(chat_id, "❌ <b>Format salah!</b>\nHarap masukkan angka saja (tanpa titik).\n\nSilakan ketik harga per hari:")
                 return
-            role_target = state['step'].replace('input_price_', '')
-            set_price(role_target, int(text))
+            ip_target = state['step'].replace('input_price_ip_', '')
+            set_price_ip(ip_target, int(text))
             del USER_STATE[user_id]
-            send_message_with_keyboard(chat_id, f"✅ Harga untuk <b>{role_target}</b> berhasil diubah menjadi <b>Rp {text}/hari</b>.")
-            msg = get_admin_menu_text()
-            keyboard = get_admin_menu_keyboard()
-            send_message_with_keyboard(chat_id, msg, reply_markup=keyboard)
+            send_message_with_keyboard(chat_id, f"✅ Harga untuk <b>{ip_target} IP</b> berhasil diubah menjadi <b>Rp {text}/hari</b>.\nSilakan tekan /admin untuk kembali mengecek menu.")
             return
             
         # --- PROSES TOP UP SALDO ---
@@ -695,9 +720,17 @@ def process_message(text, chat_id, first_name, user_id):
                 "parse_mode": "HTML", 
                 "reply_markup": keyboard
             }
-            requests.post(url_photo, json=payload)
+            
+            res = requests.post(url_photo, json=payload).json()
+            if not res.get("ok"):
+                msg_fallback = msg + f"\n\n[ ⚠️ <i>Gagal memuat gambar QRIS, silakan gunakan link ini:</i> {QRIS_IMAGE_URL} ]"
+                send_message_with_keyboard(chat_id, msg_fallback, reply_markup=keyboard)
             return
             
+        elif state['step'] == 'awaiting_receipt':
+            send_message_with_keyboard(chat_id, "⚠️ <b>Silakan kirim/upload FOTO STRUK bukti transfer.</b>\nBukan berupa teks (Jangan mengetik). Klik icon penjepit kertas lalu pilih foto struk.")
+            return
+
         elif state['step'] == 'topup_pending':
             send_message_with_keyboard(chat_id, "⚠️ <b>Pengajuan Anda sedang diproses.</b>\nMohon tunggu admin memverifikasi struk Anda sebelumnya.")
             return
@@ -708,10 +741,7 @@ def process_message(text, chat_id, first_name, user_id):
                 return
             set_server_limit(text)
             del USER_STATE[user_id]
-            send_message_with_keyboard(chat_id, f"✅ Limit maksimal server berhasil diubah menjadi <b>{text}</b> Akun.")
-            msg = get_admin_menu_text()
-            keyboard = get_admin_menu_keyboard()
-            send_message_with_keyboard(chat_id, msg, reply_markup=keyboard)
+            send_message_with_keyboard(chat_id, f"✅ Limit maksimal server berhasil diubah menjadi <b>{text}</b> Akun.\nSilakan tekan /admin untuk mengecek menu.")
             return
 
         elif state['step'] == 'username':
@@ -739,7 +769,11 @@ def process_message(text, chat_id, first_name, user_id):
             
             hari = int(text)
             user_data = get_user(user_id)
-            harga_per_hari = get_price(user_data['role'])
+            
+            # Ambil Limit IP yang di-save di state sebelumnya
+            iplimit = state.get('iplimit', '1')
+            
+            harga_per_hari = get_price_ip(iplimit)
             total_harga = hari * harga_per_hari
             
             if user_data['role'] not in ["ADMIN", "OWNER"] and user_data['balance'] < total_harga:
@@ -765,7 +799,7 @@ def process_message(text, chat_id, first_name, user_id):
             user_ssh = state['username']
             pwd_ssh = state['password']
             protocol = state['protocol']
-            ip_limit = "2"
+            ip_limit = iplimit # SESUAI DENGAN TOMBOL YANG DIKLIK (1,2,3, atau 5)
             kuota_gb = "70"
             
             try: exp_date = (datetime.now() + timedelta(days=hari)).strftime('%Y-%m-%d')
@@ -822,7 +856,6 @@ def process_message(text, chat_id, first_name, user_id):
             return
 
     if text.startswith("/"):
-        # Jika user sedang pending topup, jangan hapus state-nya dengan /start
         if user_id in USER_STATE and USER_STATE[user_id].get('step') != 'topup_pending':
             del USER_STATE[user_id]
             
@@ -844,18 +877,29 @@ def process_message(text, chat_id, first_name, user_id):
                 parts = text.split()
                 if len(parts) == 3:
                     target_id = parts[1]
-                    try:
-                        amount = int(parts[2])
-                        db = load_db()
-                        if target_id in db:
-                            db[target_id]["balance"] += amount
-                            save_db(db)
+                    amount_str = parts[2]
+                elif len(parts) == 2:
+                    target_id = str(user_id)
+                    amount_str = parts[1]
+                else:
+                    send_message_with_keyboard(chat_id, "❌ Format salah!\nGunakan: <code>/addsaldo [ID_USER] [JUMLAH]</code>\nAtau isi saldo sendiri: <code>/addsaldo [JUMLAH]</code>")
+                    return
+                    
+                try:
+                    amount = int(amount_str)
+                    db = load_db()
+                    if target_id in db:
+                        db[target_id]["balance"] += amount
+                        save_db(db)
+                        if target_id == str(user_id):
+                            send_message_with_keyboard(chat_id, f"✅ Sukses menambah saldo sebesar <b>Rp {amount:,}</b> ke akun Anda sendiri.")
+                        else:
                             send_message_with_keyboard(chat_id, f"✅ Berhasil menambah saldo <b>Rp {amount:,}</b> ke ID <code>{target_id}</code>")
                             send_message_with_keyboard(target_id, f"💰 <b>SALDO MASUK!</b>\nAdmin telah menambahkan saldo sebesar <b>Rp {amount:,}</b> ke akun Anda.")
-                        else:
-                            send_message_with_keyboard(chat_id, "❌ ID User tidak ditemukan di database.")
-                    except: send_message_with_keyboard(chat_id, "❌ Format salah. Jumlah harus berupa angka tanpa titik.")
-                else: send_message_with_keyboard(chat_id, "❌ Format: <code>/addsaldo [ID] [JUMLAH]</code>")
+                    else:
+                        send_message_with_keyboard(chat_id, "❌ ID User tidak ditemukan di database.")
+                except:
+                    send_message_with_keyboard(chat_id, "❌ Format salah. Jumlah harus berupa angka tanpa titik.")
 
         elif text.startswith("/addreseller"):
             if str(user_id) == str(OWNER_ID):
