@@ -35,7 +35,7 @@ sleep 1
 echo -e "\e[33m[INFO] Update & Install Packages (Non-interactive)...\e[0m"
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools psmisc lsof vnstat bc jq
+apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools psmisc lsof vnstat bc
 
 # Matikan web server bawaan VPS & bebaskan port tunneling
 echo -e "\e[33m[INFO] Membersihkan port dan service yang berbenturan...\e[0m"
@@ -559,6 +559,7 @@ systemctl restart vps-api
 echo -e "\e[33m[INFO] Setting Telegram Bot Base...\e[0m"
 wget -qO /usr/local/bin/vps-bot "https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py"
 chmod +x /usr/local/bin/vps-bot
+chmod +x /usr/local/bin/vps-bot
 
 cat > /etc/systemd/system/vps-bot.service <<-END
 [Unit]
@@ -606,20 +607,20 @@ check_service() {
 }
 
 check_api() {
-    if grep -qE "API_SECRET\s*=\s*['\"]PREMDIGITAL_RAHASIA_123['\"]" /usr/local/bin/vps-api 2>/dev/null; then
-        echo -e "${Y}WAITING CONFIG${NC}"
-    elif ! systemctl is-active --quiet vps-api 2>/dev/null && ! pidof vps-api >/dev/null 2>&1; then
+    if ! systemctl is-active --quiet vps-api 2>/dev/null && ! pidof vps-api >/dev/null 2>&1; then
         echo -e "${R}STOPPED${NC}"
+    elif grep -qE "API_SECRET\s*=\s*['\"]PREMDIGITAL_RAHASIA_123['\"]" /usr/local/bin/vps-api 2>/dev/null; then
+        echo -e "${Y}WAITING CONFIG${NC}"
     else
         echo -e "${G}RUNNING${NC}"
     fi
 }
 
 check_bot() {
-    if grep -qE "BOT_TOKEN\s*=\s*['\"]ISI_TOKEN_BOT_DISINI['\"]" /usr/local/bin/vps-bot 2>/dev/null; then
-        echo -e "${Y}WAITING TOKEN${NC}"
-    elif ! systemctl is-active --quiet vps-bot 2>/dev/null && ! pidof vps-bot >/dev/null 2>&1; then
+    if ! systemctl is-active --quiet vps-bot 2>/dev/null && ! pidof vps-bot >/dev/null 2>&1; then
         echo -e "${R}STOPPED${NC}"
+    elif grep -qE "BOT_TOKEN\s*=\s*['\"]ISI_TOKEN_BOT_DISINI['\"]" /usr/local/bin/vps-bot 2>/dev/null; then
+        echo -e "${Y}WAITING TOKEN${NC}"
     else
         echo -e "${G}RUNNING${NC}"
     fi
@@ -745,16 +746,16 @@ while true; do
     echo -e " IP VPS     : ${G}$IP${NC}"
     echo -e "${C}======================================${NC}"
     echo -e " [1] Buat Akun SSH Baru"
-    echo -e " [2] Hapus Akun SSH"
-    echo -e " [3] List Akun SSH Aktif"
-    echo -e " [4] Ganti Domain Server"
-    echo -e " [5] Cek Status Port & Service Tunneling"
-    echo -e " [6] Cek Statistik Bandwidth VPS (vnStat)"
-    echo -e " [7] Restart Semua Service Tunneling"
-    echo -e " [8] Pengaturan Banner SSH (/etc/issue.net)"
-    echo -e " [9] Jalankan Auto-Delete Expired"
-    echo -e " [10] Cek & Atur Auto-Kill Multi-Login (Per-Akun)"
-    echo -e " [11] Menu Service API & Bot Telegram"
+    echo -e " [2] Buat Akun VMESS Baru"
+    echo -e " [3] Buat Akun VLESS Baru"
+    echo -e " [4] Buat Akun TROJAN Baru"
+    echo -e " [5] Hapus Akun SSH/VPN"
+    echo -e " [6] List Akun Aktif & Expired"
+    echo -e " [7] Status Service & Port Tunneling"
+    echo -e " [8] Cek Statistik Bandwidth VPS"
+    echo -e " [9] Restart Semua Service"
+    echo -e " [10] Cek / Kelola Auto-Kill Multi-Login"
+    echo -e " [11] Service Menu API & Bot"
     echo -e " [0] Keluar"
     echo -e "${C}======================================${NC}"
     read -p " Pilih Opsi [0-11]: " opt
@@ -870,13 +871,31 @@ while true; do
             ;;
         2)
             clear
+            echo -e "Jalankan Script Buat Akun VMESS..."
+            /usr/local/bin/add-vmess
+            read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+            ;;
+        3)
+            clear
+            echo -e "Jalankan Script Buat Akun VLESS..."
+            /usr/local/bin/add-vless
+            read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+            ;;
+        4)
+            clear
+            echo -e "Jalankan Script Buat Akun TROJAN..."
+            /usr/local/bin/add-trojan
+            read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
+            ;;
+        5)
+            clear
             read -p "Masukkan Username yang mau dihapus: " user
             userdel -f $user 2>/dev/null
             rm -f "/etc/premdigital/multilogin/$user" 2>/dev/null
             echo -e "${R}Akun $user berhasil dihapus.${NC}"
             sleep 1.5
             ;;
-        3)
+        6)
             clear
             echo -e "${C}======================================${NC}"
             echo -e "${Y}         LIST AKUN SSH AKTIF          ${NC}"
@@ -896,16 +915,7 @@ while true; do
             echo ""
             read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
             ;;
-        4)
-            clear
-            echo -e "${C}=== GANTI DOMAIN SERVER ===${NC}"
-            echo -e "Domain Saat Ini: ${Y}$DOMAIN${NC}"
-            read -p "Masukkan Domain Baru: " newdomain
-            echo "$newdomain" > /etc/vps-domain.txt
-            echo -e "${Y}Domain berhasil diubah menjadi: $newdomain${NC}"
-            sleep 1.5
-            ;;
-        5)
+        7)
             clear
             echo -e "${C}======================================${NC}"
             echo -e "${Y}    STATUS SERVICE & PORT TUNNELING   ${NC}"
@@ -929,7 +939,7 @@ while true; do
             echo ""
             read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
             ;;
-        6)
+        8)
             clear
             echo -e "${C}======================================${NC}"
             echo -e "${Y}       STATISTIK & KUOTA BANDWIDTH    ${NC}"
@@ -984,7 +994,7 @@ while true; do
                     ;;
             esac
             ;;
-        7)
+        9)
             clear
             echo -e "${Y}Merestart semua service tunneling...${NC}"
             systemctl restart ws-proxy 2>/dev/null

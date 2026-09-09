@@ -1,6 +1,0 @@
-{
-  "name": "PremdigitalTunnel_bot",
-  "description": "Free Ssh Tunnel Server Singapore - Get instant access to a secure and unrestricted internet experience.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
