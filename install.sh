@@ -550,9 +550,8 @@ cat > /usr/local/bin/vps-bot <<-END
 import requests, time, os, subprocess
 from datetime import datetime, timedelta
 
-BOT_TOKEN = "8364783984:AAEB7J-fQDIwYfnNL9Vhq9X9AIWUgk4jQNs"
+BOT_TOKEN = "ISI_TOKEN_BOT_DISINI"
 LAST_UPDATE_ID = 0
-
 
 try:
     with open('/etc/vps-domain.txt', 'r') as f:
