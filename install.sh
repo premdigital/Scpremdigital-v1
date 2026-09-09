@@ -3,8 +3,8 @@
 if [[ "$1" == "--update-menu" ]]; then
     echo -e "\e[32mMendownload dan memperbarui menu...\e[0m"
     wget -qO /tmp/temp-install.sh https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/install.sh
-    sed -n "/^cat > \/usr\/bin\/menu << 'END'/,/^END/p" /tmp/temp-install.sh | bash
-    sed -n "/^cat > \/usr\/bin\/menu-service << 'END'/,/^END/p" /tmp/temp-install.sh | bash
+    awk '/^cat > \/usr\/bin\/menu << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu
+    awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; print; next} /^END$/{if(flag){flag=0; print; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
     chmod +x /usr/bin/menu /usr/bin/menu-service
     rm -f /tmp/temp-install.sh
     echo -e "\e[32mMenu berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
