@@ -37,7 +37,7 @@ EOF
     fi
     systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
 fi
-fuser -k 4430/tcp 2>/dev/null || true
+fuser -k 4430/tcp >/dev/null 2>&1 || true
 
 # Buat Sertifikat SSL untuk Xray jika belum ada atau kosong
 if [ ! -s /etc/xray/xray.crt ] || [ ! -s /etc/xray/xray.key ]; then

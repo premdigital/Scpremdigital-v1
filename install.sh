@@ -122,7 +122,7 @@ After=network.target dropbear.service
 [Service]
 Type=simple
 User=root
-ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp >/dev/null 2>&1 || true'
 ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
 Restart=always
 RestartSec=3
@@ -133,7 +133,7 @@ WantedBy=multi-user.target
 EOF
 
     ln -sf /etc/systemd/system/stunnel4.service /etc/systemd/system/stunnel.service 2>/dev/null || true
-    fuser -k 8443/tcp 2>/dev/null || true
+    fuser -k 8443/tcp >/dev/null 2>&1 || true
     pkill -9 stunnel4 2>/dev/null || true
     pkill -9 stunnel 2>/dev/null || true
     systemctl daemon-reload
@@ -246,15 +246,15 @@ systemctl disable nginx 2>/dev/null || true
 killall -9 apache2 2>/dev/null || true
 killall -9 nginx 2>/dev/null || true
 
-fuser -k 443/tcp 2>/dev/null || true
-fuser -k 80/tcp 2>/dev/null || true
-fuser -k 700/tcp 2>/dev/null || true
-fuser -k 109/tcp 2>/dev/null || true
-fuser -k 143/tcp 2>/dev/null || true
-fuser -k 4430/tcp 2>/dev/null || true
-fuser -k 8443/tcp 2>/dev/null || true
-fuser -k 8880/tcp 2>/dev/null || true
-fuser -k 2082/tcp 2>/dev/null || true
+fuser -k 443/tcp >/dev/null 2>&1 || true
+fuser -k 80/tcp >/dev/null 2>&1 || true
+fuser -k 700/tcp >/dev/null 2>&1 || true
+fuser -k 109/tcp >/dev/null 2>&1 || true
+fuser -k 143/tcp >/dev/null 2>&1 || true
+fuser -k 4430/tcp >/dev/null 2>&1 || true
+fuser -k 8443/tcp >/dev/null 2>&1 || true
+fuser -k 8880/tcp >/dev/null 2>&1 || true
+fuser -k 2082/tcp >/dev/null 2>&1 || true
 
 # Pastikan firewall tidak memblokir port
 ufw disable 2>/dev/null || true
@@ -631,7 +631,7 @@ After=network.target dropbear.service
 [Service]
 Type=simple
 User=root
-ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp >/dev/null 2>&1 || true'
 ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
 Restart=always
 RestartSec=3
@@ -642,7 +642,7 @@ WantedBy=multi-user.target
 EOF
 
 ln -sf /etc/systemd/system/stunnel4.service /etc/systemd/system/stunnel.service 2>/dev/null || true
-fuser -k 8443/tcp 2>/dev/null || true
+fuser -k 8443/tcp >/dev/null 2>&1 || true
 pkill -9 stunnel4 2>/dev/null || true
 pkill -9 stunnel 2>/dev/null || true
 systemctl daemon-reload
@@ -1394,7 +1394,7 @@ while true; do
             echo -e "${Y}Merestart semua service tunneling...${NC}"
             systemctl restart ws-proxy 2>/dev/null
             systemctl restart xray 2>/dev/null
-            fuser -k 8443/tcp 2>/dev/null || true
+            fuser -k 8443/tcp >/dev/null 2>&1 || true
             systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
             systemctl restart dropbear 2>/dev/null
             systemctl restart badvpn-udpgw 2>/dev/null
@@ -1789,7 +1789,7 @@ do_restore_core() {
     echo -e "${Y}[5/5] Merestart seluruh service tunneling...${NC}"
     systemctl restart ws-proxy 2>/dev/null
     systemctl restart xray 2>/dev/null
-    fuser -k 8443/tcp 2>/dev/null || true
+    fuser -k 8443/tcp >/dev/null 2>&1 || true
     systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
     systemctl restart dropbear 2>/dev/null
     systemctl restart badvpn-udpgw 2>/dev/null
