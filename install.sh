@@ -6,7 +6,11 @@ if [[ "$1" == "--update-menu" ]]; then
     awk '/^cat > \/usr\/bin\/menu << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu
     awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
     awk '/^cat > \/usr\/bin\/menu-backup << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-backup
-    chmod +x /usr/bin/menu /usr/bin/menu-service /usr/bin/menu-backup 2>/dev/null
+    awk '/^cat > \/usr\/local\/bin\/ws-proxy << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/local/bin/ws-proxy
+    awk '/^cat > \/etc\/systemd\/system\/ws-proxy\.service << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /etc/systemd/system/ws-proxy.service
+    chmod +x /usr/bin/menu /usr/bin/menu-service /usr/bin/menu-backup /usr/local/bin/ws-proxy 2>/dev/null
+    systemctl daemon-reload 2>/dev/null
+    systemctl restart ws-proxy 2>/dev/null
     ln -sf /usr/bin/menu-backup /usr/bin/backup-vps 2>/dev/null
     ln -sf /usr/bin/menu-backup /usr/bin/restore-vps 2>/dev/null
     grep -qxF "alias backup='/usr/bin/backup-vps'" ~/.bashrc || echo "alias backup='/usr/bin/backup-vps'" >> ~/.bashrc
@@ -126,6 +130,7 @@ ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp >/dev/null 2>&1 || true'
 ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
 Restart=always
 RestartSec=3
+StartLimitIntervalSec=0
 KillMode=mixed
 
 [Install]
@@ -394,6 +399,7 @@ Type=simple
 ExecStart=/usr/sbin/dropbear -F -E -p 109 -p 143 -b /etc/issue.net
 Restart=always
 RestartSec=3
+StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
@@ -579,6 +585,7 @@ User=root
 ExecStart=/usr/bin/python3 /usr/local/bin/ws-proxy
 Restart=always
 RestartSec=3
+StartLimitIntervalSec=0
 KillMode=process
 
 [Install]
@@ -635,6 +642,7 @@ ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp >/dev/null 2>&1 || true'
 ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
 Restart=always
 RestartSec=3
+StartLimitIntervalSec=0
 KillMode=mixed
 
 [Install]
@@ -667,6 +675,7 @@ Type=simple
 ExecStart=/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 500 --max-connections-for-client 20
 Restart=always
 RestartSec=3
+StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
@@ -683,6 +692,7 @@ Type=simple
 ExecStart=/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7100 --max-clients 500 --max-connections-for-client 20
 Restart=always
 RestartSec=3
+StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
