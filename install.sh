@@ -21,6 +21,10 @@ if [[ "$1" == "--update-menu" ]]; then
     wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
     wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
     wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
+    wget -qO /usr/local/bin/vps-bot https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py
+    sed -i "s/-m -s \\/bin\\/false -M/-s \\/bin\\/false -M/g" /usr/local/bin/vps-bot
+    chmod +x /usr/local/bin/vps-bot
+    systemctl restart vps-bot 2>/dev/null
     wget -qO /usr/local/bin/del-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/del-account.sh
     wget -qO /usr/local/bin/list-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/list-account.sh
     chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan /usr/local/bin/del-account /usr/local/bin/list-account
@@ -30,6 +34,7 @@ if [[ "$1" == "--update-menu" ]]; then
         existing_token=$(grep -oP 'BOT_TOKEN\s*=\s*"\K[^"]+' /usr/local/bin/vps-bot 2>/dev/null || true)
         wget -qO /tmp/vps-bot.py https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py
         if [ -s /tmp/vps-bot.py ]; then
+            sed -i "s/-m -s \\/bin\\/false -M/-s \\/bin\\/false -M/g" /tmp/vps-bot.py
             cp -f /tmp/vps-bot.py /usr/local/bin/vps-bot
             chmod +x /usr/local/bin/vps-bot
             if [ -n "$existing_token" ] && [ "$existing_token" != "ISI_TOKEN_BOT_DISINI" ]; then
@@ -40,6 +45,7 @@ if [[ "$1" == "--update-menu" ]]; then
         rm -f /tmp/vps-bot.py
     else
         wget -qO /usr/local/bin/vps-bot https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py
+        sed -i "s/-m -s \/bin\/false -M/-s \/bin\/false -M/g" /usr/local/bin/vps-bot
         chmod +x /usr/local/bin/vps-bot
         systemctl restart vps-bot 2>/dev/null || true
     fi
@@ -795,6 +801,7 @@ systemctl restart vps-api
 # 11. Bot Telegram Server-Side
 echo -e "\e[33m[INFO] Setting Telegram Bot Base...\e[0m"
 wget -qO /usr/local/bin/vps-bot "https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py"
+sed -i "s/-m -s \/bin\/false -M/-s \/bin\/false -M/g" /usr/local/bin/vps-bot
 chmod +x /usr/local/bin/vps-bot
 chmod +x /usr/local/bin/vps-bot
 
@@ -1205,6 +1212,10 @@ while true; do
             if [ ! -f /usr/local/bin/add-trojan ]; then
                 echo -e "\e[33m[INFO] Mengunduh modul Buat Akun TROJAN...\e[0m"
                 wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
+    wget -qO /usr/local/bin/vps-bot https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py
+    sed -i "s/-m -s \\/bin\\/false -M/-s \\/bin\\/false -M/g" /usr/local/bin/vps-bot
+    chmod +x /usr/local/bin/vps-bot
+    systemctl restart vps-bot 2>/dev/null
                 chmod +x /usr/local/bin/add-trojan
             fi
             /usr/local/bin/add-trojan
@@ -2139,6 +2150,10 @@ wget -qO /usr/local/bin/setup-xray https://raw.githubusercontent.com/premdigital
 wget -qO /usr/local/bin/add-vmess https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vmess.sh
 wget -qO /usr/local/bin/add-vless https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-vless.sh
 wget -qO /usr/local/bin/add-trojan https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/add-trojan.sh
+    wget -qO /usr/local/bin/vps-bot https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py
+    sed -i "s/-m -s \\/bin\\/false -M/-s \\/bin\\/false -M/g" /usr/local/bin/vps-bot
+    chmod +x /usr/local/bin/vps-bot
+    systemctl restart vps-bot 2>/dev/null
 wget -qO /usr/local/bin/del-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/del-account.sh
 wget -qO /usr/local/bin/list-account https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/list-account.sh
 chmod +x /usr/local/bin/setup-xray /usr/local/bin/add-vmess /usr/local/bin/add-vless /usr/local/bin/add-trojan /usr/local/bin/del-account /usr/local/bin/list-account
