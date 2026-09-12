@@ -1071,12 +1071,6 @@ while true; do
     UPTIME_INFO=$(get_uptime_info)
 
     clear
-    echo -e "${C}┌──────────────────────────────────────┐${NC}"
-    printf "${C}│${NC}  Version     : %-22s${C}│${NC}\n" "SPv25.8.31"
-    printf "${C}│${NC}  Order By    : %-22s${C}│${NC}\n" "Premdigital"
-    printf "${C}│${NC}  Client Name : %-22s${C}│${NC}\n" "$CLIENT_NAME"
-    printf "${C}│${NC}  Expiry In   : %-22s${C}│${NC}\n" "$SISA_HARI Days"
-    echo -e "${C}└──────────────────────────────────────┘${NC}"
     echo -e "${C}======================================${NC}"
     echo -e "${Y}          PREMDIGITAL TUNNEL          ${NC}"
     echo -e "${C}======================================${NC}"
@@ -1090,6 +1084,12 @@ while true; do
     echo -e " IP VPS     : ${G}$IP${NC}"
     echo -e " UPTIME     : $UPTIME_INFO"
     echo -e "${C}======================================${NC}"
+    echo -e "${C}┌──────────────────────────────────────┐${NC}"
+    printf "${C}│${NC}  Version     : %-22s${C}│${NC}\n" "SPv25.8.31"
+    printf "${C}│${NC}  Order By    : %-22s${C}│${NC}\n" "Premdigital"
+    printf "${C}│${NC}  Client Name : %-22s${C}│${NC}\n" "$CLIENT_NAME"
+    printf "${C}│${NC}  Expiry In   : %-22s${C}│${NC}\n" "$SISA_HARI Days"
+    echo -e "${C}└──────────────────────────────────────┘${NC}"
     echo -e " [1] Buat Akun SSH"
     echo -e " [2] Buat Akun VMESS"
     echo -e " [3] Buat Akun VLESS"
