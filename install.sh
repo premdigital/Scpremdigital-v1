@@ -1071,9 +1071,9 @@ while true; do
     UPTIME_INFO=$(get_uptime_info)
 
     clear
-    echo -e "${C}✧===========${Y}ஐஇ⚙️இஐ${C}===========✧${NC}"
+    echo -e "${C}✧=============${Y}ஐஇ⚙️இஐ${C}=============✧${NC}"
     echo -e "          ${Y}PREMDIGITAL TUNNEL${NC}"
-    echo -e "${C}✧===========${Y}ஐஇ⚙️இஐ${C}===========✧${NC}"
+    echo -e "${C}✧=============${Y}ஐஇ⚙️இஐ${C}=============✧${NC}"
     echo -e " OS         : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
     echo -e " RAM        : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
     echo -e " SWAP       : $SWAP_INFO"
