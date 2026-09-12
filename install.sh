@@ -1568,9 +1568,10 @@ while true; do
     echo -e " [2] Ganti Token Bot Telegram"
     echo -e " [3] Restart Service (API & Bot)"
     echo -e " [4] Cek Status Koneksi API (Test Ping)"
+    echo -e " [5] Ganti API Key Firebase Web Stats"
     echo -e " [0] Kembali ke Menu Utama"
     echo -e "${C}======================================${NC}"
-    read -p " Pilih Opsi [0-4]: " opt
+    read -p " Pilih Opsi [0-5]: " opt
     case $opt in
         1)
             clear
@@ -1612,6 +1613,21 @@ while true; do
             userdel -f testapi 2>/dev/null
             echo ""
             read -r -p "Tekan [Enter] untuk kembali ke menu service..." dummy
+            ;;
+        5)
+            clear
+            echo -e "${Y}=== Ganti API Key Firebase Web Stats ===${NC}"
+            read -p "Masukkan API Key Firebase Baru: " fb_key
+            if [ -n "$fb_key" ]; then
+                mkdir -p /etc/premdigital
+                echo "$fb_key" > /etc/premdigital/firebase_key.txt
+                echo -e "\n${G}API Key Firebase berhasil disimpan!${NC}"
+                echo -e "Mencoba sinkronisasi sekarang..."
+                /usr/local/bin/sync-stats
+            else
+                echo -e "${R}API Key tidak boleh kosong!${NC}"
+            fi
+            sleep 2
             ;;
         0)
             break
@@ -2243,7 +2259,11 @@ chmod +x /usr/local/bin/auto-kill-multilogin
 echo -e "\e[33m[INFO] Setting Firebase Web Stats Sync...\e[0m"
 cat > /usr/local/bin/sync-stats << 'END'
 #!/bin/bash
-API_URL="https://firestore.googleapis.com/v1/projects/integrated-wharf-pf6jr/databases/ai-studio-premdigitaltunne-563571df-29ee-44be-a591-c6690b4a41c4/documents/platform/stats?key=AIzaSyAymTIeAbbtdD5JdbzkpwMZZHPi05YIlGU"
+FB_KEY=$(cat /etc/premdigital/firebase_key.txt 2>/dev/null)
+if [ -z "$FB_KEY" ]; then
+    FB_KEY="AIzaSyAymTIeAbbtdD5JdbzkpwMZZHPi05YIlGU"
+fi
+API_URL="https://firestore.googleapis.com/v1/projects/integrated-wharf-pf6jr/databases/ai-studio-premdigitaltunne-563571df-29ee-44be-a591-c6690b4a41c4/documents/platform/stats?key=${FB_KEY}"
 
 total_ssh=$(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd | wc -l)
 total_vmess=$(grep -i "vmess" /etc/premdigital/xray-users.db 2>/dev/null | wc -l)
