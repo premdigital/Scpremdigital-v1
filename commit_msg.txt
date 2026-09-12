@@ -1,0 +1,5 @@
+Update vps-bot.py to handle Unlimited quota properly
+
+- Added support for 0 to represent Unlimited quota
+- Updated admin display to show "Unlimited" instead of "0 GB"
+- Updated purchase receipts to show "Unlimited"

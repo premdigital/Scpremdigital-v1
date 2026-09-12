@@ -523,7 +523,8 @@ def process_callback(callback_query):
     elif data == "admin_quota_setting":
         USER_STATE[user_id] = {'step': 'input_quota'}
         curr = get_quota()
-        msg = f"⚙️ <b>PENGATURAN KUOTA VPN</b>\n━━━━━━━━━━━━━━━━━━━━━━\nKuota saat ini: <b>{curr} GB</b>\n\nSilakan ketik angka kuota baru (dalam GB):\n<i>Contoh: 100</i>"
+        display_curr = "Unlimited" if curr == "0" else f"{curr} GB"
+        msg = f"⚙️ <b>PENGATURAN KUOTA VPN</b>\n━━━━━━━━━━━━━━━━━━━━━━\nKuota saat ini: <b>{display_curr}</b>\n\nSilakan ketik angka kuota baru (dalam GB):\n<i>(Ketik 0 untuk Unlimited)\nContoh: 100</i>"
         keyboard = {"inline_keyboard": [[{"text": "⛔ Batal", "callback_data": "back_to_admin"}]]}
         edit_message_with_keyboard(chat_id, message_id, msg, reply_markup=keyboard)
 
@@ -635,12 +636,14 @@ def process_callback(callback_query):
                 p3 = get_price_ip("3"); p5 = get_price_ip("5")
                 hrg_title = "💰 DAFTAR HARGA:"
                 
+            curr_q = get_quota()
+            display_q = "Unlimited" if curr_q == "0" else f"{curr_q} GB"
             msg = (
                 f"🌐 <b>{server_code}</b>\n"
                 f"📍 Lokasi: {country}\n"
                 f"📡 ISP: {isp}\n"
                 f"⚡ Ping: {ping_ms} ms 🟢\n"
-                f"📊 Quota: {get_quota()} GB\n"
+                f"📊 Quota: {display_q}\n"
                 f"👥 Total Akun: {current_acc}/{max_limit}\n\n"
                 f"<b>{hrg_title}</b>\n"
                 f"▪️ 1 IP = Rp {p1} / Hari\n"
@@ -736,7 +739,7 @@ def process_callback(callback_query):
                     f"⏳ <b>Durasi   :</b> {durasi_label}\n"
                     f"📅 <b>Expired  :</b> {exp_date}\n"
                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"<b>🔌 PORT LAYANAN:</b>\n"
                     f"▪️ TLS/SSL  : 443, 8443\n"
@@ -763,7 +766,7 @@ def process_callback(callback_query):
                     f"⏳ <b>Durasi   :</b> {durasi_label}\n"
                     f"📅 <b>Expired  :</b> {exp_date}\n"
                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"🔒 <b>1. VMESS WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
                     f"🔓 <b>2. VMESS WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
@@ -784,7 +787,7 @@ def process_callback(callback_query):
                     f"⏳ <b>Durasi   :</b> {durasi_label}\n"
                     f"📅 <b>Expired  :</b> {exp_date}\n"
                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"🔒 <b>1. VLESS WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
                     f"🔓 <b>2. VLESS WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
@@ -804,7 +807,7 @@ def process_callback(callback_query):
                     f"⏳ <b>Durasi   :</b> {durasi_label}\n"
                     f"📅 <b>Expired  :</b> {exp_date}\n"
                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"🔒 <b>1. TROJAN WS TLS (Port 443):</b>\n<code>{l_tls}</code>\n\n"
                     f"🔓 <b>2. TROJAN WS Non-TLS (Port 80):</b>\n<code>{l_ntls}</code>\n\n"
@@ -998,7 +1001,8 @@ def process_message(text, chat_id, first_name, user_id):
                 return
             set_quota(text)
             del USER_STATE[user_id]
-            send_message_with_keyboard(chat_id, f"✅ Kuota VPN berhasil diubah menjadi <b>{text} GB</b>.\nSilakan tekan /admin untuk kembali.")
+            display_text = "Unlimited" if text == "0" else f"{text} GB"
+            send_message_with_keyboard(chat_id, f"✅ Kuota VPN berhasil diubah menjadi <b>{display_text}</b>.\nSilakan tekan /admin untuk kembali.")
             return
             
         elif state['step'] == 'topup_nominal':
@@ -1229,7 +1233,7 @@ def process_message(text, chat_id, first_name, user_id):
                     f"⏳ <b>Durasi   :</b> {hari} Hari\n"
                     f"📅 <b>Expired  :</b> {exp_date}\n"
                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
                     f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
@@ -1259,7 +1263,7 @@ def process_message(text, chat_id, first_name, user_id):
                     f"⏳ <b>Durasi   :</b> {hari} Hari\n"
                     f"📅 <b>Expired  :</b> {exp_date}\n"
                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
                     f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
@@ -1283,7 +1287,7 @@ def process_message(text, chat_id, first_name, user_id):
                     f"⏳ <b>Durasi   :</b> {hari} Hari\n"
                     f"📅 <b>Expired  :</b> {exp_date}\n"
                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
                     f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
@@ -1306,7 +1310,7 @@ def process_message(text, chat_id, first_name, user_id):
                     f"⏳ <b>Durasi   :</b> {hari} Hari\n"
                     f"📅 <b>Expired  :</b> {exp_date}\n"
                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
-                    f"📦 <b>Kuota    :</b> {kuota_gb} GB\n"
+                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
                     f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"
