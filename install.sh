@@ -404,9 +404,9 @@ cat > /etc/issue.net << 'END'
 END
 cp -f /etc/issue.net /etc/issue 2>/dev/null || true
 cat > /etc/motd << 'END_MOTD'
-✧===============ஐஇ⚙இஐ===============✧
+========================================
         ★ PREMDIGITAL TUNNELING ★        
-✧===============ஐஇ⚙இஐ===============✧
+========================================
 Silahkan Ketik { menu }
 END_MOTD
 
@@ -1071,9 +1071,9 @@ while true; do
     UPTIME_INFO=$(get_uptime_info)
 
     clear
-    echo -e "${C}✧================${Y}⚙${C}=================✧${NC}"
+    echo -e "${C}✧===============${Y}► ◈◈ ◄${C}===============✧${NC}"
     echo -e "          ${Y}PREMDIGITAL TUNNEL${NC}"
-    echo -e "${C}✧================${Y}⚙${C}=================✧${NC}"
+    echo -e "${C}✧===============${Y}► ◈◈ ◄${C}===============✧${NC}"
     echo -e " OS         : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
     echo -e " RAM        : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
     echo -e " SWAP       : $SWAP_INFO"
@@ -1085,7 +1085,7 @@ while true; do
     echo -e " UPTIME     : $UPTIME_INFO"
     echo -e "${C}======================================${NC}"
     echo -e "${C}┌──────────────────────────────────────┐${NC}"
-    printf "${C}│${NC}  Version     : %-22s${C}│${NC}\n" "SPv26.08.15"
+    printf "${C}│${NC}  Version     : %-22s${C}│${NC}\n" "SPv25.8.31"
     printf "${C}│${NC}  Order By    : %-22s${C}│${NC}\n" "Premdigital"
     printf "${C}│${NC}  Client Name : %-22s${C}│${NC}\n" "$CLIENT_NAME"
     printf "${C}│${NC}  Expiry In   : %-22s${C}│${NC}\n" "$SISA_HARI Days"
