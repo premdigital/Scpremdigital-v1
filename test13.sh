@@ -1,0 +1,7 @@
+#!/bin/bash
+Y="\e[33m"
+C="\e[36m"
+NC="\e[0m"
+echo -e "${C}✧===========${Y}ஐஇ⚙️இஐ${C}===========✧${NC}"
+echo -e "          ${Y}PREMDIGITAL TUNNEL${NC}"
+echo -e "${C}✧===========${Y}ஐஇ⚙️இஐ${C}===========✧${NC}"
