@@ -404,9 +404,9 @@ cat > /etc/issue.net << 'END'
 END
 cp -f /etc/issue.net /etc/issue 2>/dev/null || true
 cat > /etc/motd << 'END_MOTD'
-========================================
+<center><font color="#0080ff"><b>✧===============</font><font color="#00e5ff">ஐஇ<font color="#ffd700">⚙</font>இஐ</font><font color="#0080ff">===============✧</b></font>
         ★ PREMDIGITAL TUNNELING ★        
-========================================
+<font color="#0080ff"><b>✧===============</font><font color="#00e5ff">ஐஇ<font color="#ffd700">⚙</font>இஐ</font><font color="#0080ff">===============✧</b></font></center>
 Silahkan Ketik { menu }
 END_MOTD
 
