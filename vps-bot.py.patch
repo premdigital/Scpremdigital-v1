@@ -1,0 +1,20 @@
+--- vps-bot.py
++++ vps-bot.py
+@@ -1001,7 +1001,7 @@
+                 return
+             set_quota(text)
+             del USER_STATE[user_id]
+-            display_text = "Unlimited" if text == "0" else f"{text} GB"
++            display_text = "Unlimited" if str(text) == "0" else f"{text} GB"
+             send_message_with_keyboard(chat_id, f"✅ Kuota VPN berhasil diubah menjadi <b>{display_text}</b>.\nSilakan tekan /admin untuk kembali.")
+             return
+             
+@@ -1233,7 +1233,7 @@
+                     f"⏳ <b>Durasi   :</b> {hari} Hari\n"
+                     f"📅 <b>Expired  :</b> {exp_date}\n"
+                     f"📱 <b>Limit IP :</b> {ip_limit} Device\n"
+-                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
++                    f"📦 <b>Kuota    :</b> {'Unlimited' if str(kuota_gb) == '0' else str(kuota_gb) + ' GB'}\n"
+                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                     f"💰 <b>Harga    :</b> Rp {total_harga:,}\n"
+                     f"💳 <b>Sisa Saldo:</b> Rp {user_data['balance']:,}\n"

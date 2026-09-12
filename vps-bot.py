@@ -1001,7 +1001,7 @@ def process_message(text, chat_id, first_name, user_id):
                 return
             set_quota(text)
             del USER_STATE[user_id]
-            display_text = "Unlimited" if text == "0" else f"{text} GB"
+            display_text = "Unlimited" if str(text) == "0" else f"{text} GB"
             send_message_with_keyboard(chat_id, f"✅ Kuota VPN berhasil diubah menjadi <b>{display_text}</b>.\nSilakan tekan /admin untuk kembali.")
             return
             
