@@ -1071,9 +1071,9 @@ while true; do
     UPTIME_INFO=$(get_uptime_info)
 
     clear
-    echo -e "${C}======================================${NC}"
-    echo -e "${Y}          PREMDIGITAL TUNNEL          ${NC}"
-    echo -e "${C}======================================${NC}"
+    echo -e "${C}✧==========${Y}ஐஇ⚙️இஐ${C}==========✧${NC}"
+    echo -e "       ${Y}PREMDIGITAL TUNNEL${NC}"
+    echo -e "${C}✧==========${Y}ஐஇ⚙️இஐ${C}==========✧${NC}"
     echo -e " OS         : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
     echo -e " RAM        : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
     echo -e " SWAP       : $SWAP_INFO"
@@ -1090,6 +1090,7 @@ while true; do
     printf "${C}│${NC}  Client Name : %-22s${C}│${NC}\n" "$CLIENT_NAME"
     printf "${C}│${NC}  Expiry In   : %-22s${C}│${NC}\n" "$SISA_HARI Days"
     echo -e "${C}└──────────────────────────────────────┘${NC}"
+    echo -e "${C}======================================${NC}"
     echo -e " [1] Buat Akun SSH"
     echo -e " [2] Buat Akun VMESS"
     echo -e " [3] Buat Akun VLESS"
