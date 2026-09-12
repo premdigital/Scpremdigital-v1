@@ -1,0 +1,24 @@
+    local elapsed_str=""
+    if [ $elapsed_days -gt 0 ]; then
+        elapsed_str="${elapsed_days} Hari, ${elapsed_hours} Jam"
+    elif [ $elapsed_hours -gt 0 ]; then
+        elapsed_str="${elapsed_hours} Jam, ${elapsed_minutes} Menit"
+    else
+        elapsed_str="${elapsed_minutes} Menit"
+    fi
+
+    local total_sec=$((total_days * 86400))
+    local remaining_sec=$((total_sec - elapsed_sec))
+
+    if [ $remaining_sec -le 0 ]; then
+        echo -e "${elapsed_str} (${R}Masa Aktif Habis / Expired${NC})"
+    else
+        local rem_days=$((remaining_sec / 86400))
+        local rem_hours=$(((remaining_sec % 86400) / 3600))
+        if [ $rem_days -gt 0 ]; then
+            echo -e "${elapsed_str} (${G}Sisa: ${rem_days} Hari${NC} / ${total_days} Hari)"
+        else
+            echo -e "${elapsed_str} (${Y}Sisa: ${rem_hours} Jam${NC} / ${total_days} Hari)"
+        fi
+    fi
+}

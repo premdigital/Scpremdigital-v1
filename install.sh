@@ -1,5 +1,26 @@
 #!/bin/bash
 
+# ==========================================
+# CEK LISENSI IP (GITHUB)
+# ==========================================
+MYIP=$(curl -sS ipv4.icanhazip.com || curl -sS ifconfig.me)
+IZIN_DATA=$(curl -sS https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+if [ -z "$IZIN_DATA" ]; then
+    echo -e "\e[31mAkses Ditolak! IP VPS ($MYIP) tidak terdaftar.\e[0m"
+    echo -e "\e[33mSilakan hubungi admin untuk mendaftarkan IP Anda.\e[0m"
+    exit 1
+fi
+EXP_DATE=$(echo "$IZIN_DATA" | awk '{print $3}')
+d1=$(date -d "$EXP_DATE" +%s 2>/dev/null)
+d2=$(date -d "today" +%s 2>/dev/null)
+if [ -n "$d1" ] && [ -n "$d2" ]; then
+    SISA_HARI=$(( (d1 - d2) / 86400 ))
+    if [ "$SISA_HARI" -lt 0 ]; then
+        echo -e "\e[31mScript Expired! Lisensi Anda sudah habis masa aktifnya.\e[0m"
+        exit 1
+    fi
+fi
+
 if [[ "$1" == "--update-menu" ]]; then
     echo -e "\e[32mMendownload dan memperbarui menu & modul Xray...\e[0m"
     wget -qO /tmp/temp-install.sh https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/install.sh
@@ -832,6 +853,27 @@ R="\e[31m"
 G="\e[32m"
 NC="\e[0m"
 
+# ==========================================
+# CEK LISENSI IP (GITHUB)
+# ==========================================
+MYIP=$(curl -sS ipv4.icanhazip.com || curl -sS ifconfig.me)
+IZIN_DATA=$(curl -sS https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+if [ -z "$IZIN_DATA" ]; then
+    echo -e "${R}Akses Ditolak! IP VPS ($MYIP) tidak terdaftar.${NC}"
+    exit 1
+fi
+CLIENT_NAME=$(echo "$IZIN_DATA" | awk '{print $2}')
+EXP_DATE=$(echo "$IZIN_DATA" | awk '{print $3}')
+d1=$(date -d "$EXP_DATE" +%s 2>/dev/null)
+d2=$(date -d "today" +%s 2>/dev/null)
+if [ -n "$d1" ] && [ -n "$d2" ]; then
+    SISA_HARI=$(( (d1 - d2) / 86400 ))
+    if [ "$SISA_HARI" -lt 0 ]; then
+        echo -e "${R}Script Expired! Lisensi Anda sudah habis masa aktifnya.${NC}"
+        exit 1
+    fi
+fi
+
 check_port() {
     local port=$1
     if ss -tuln 2>/dev/null | grep -qE "[:.]${port}[[:space:]]" || netstat -tuln 2>/dev/null | grep -qE "[:.]${port}[[:space:]]" || lsof -iTCP:${port} -sTCP:LISTEN 2>/dev/null | grep -q LISTEN; then
@@ -994,20 +1036,7 @@ get_uptime_info() {
         elapsed_str="${elapsed_minutes} Menit"
     fi
 
-    local total_sec=$((total_days * 86400))
-    local remaining_sec=$((total_sec - elapsed_sec))
-
-    if [ $remaining_sec -le 0 ]; then
-        echo -e "${elapsed_str} (${R}Masa Aktif Habis / Expired${NC})"
-    else
-        local rem_days=$((remaining_sec / 86400))
-        local rem_hours=$(((remaining_sec % 86400) / 3600))
-        if [ $rem_days -gt 0 ]; then
-            echo -e "${elapsed_str} (${G}Sisa: ${rem_days} Hari${NC} / ${total_days} Hari)"
-        else
-            echo -e "${elapsed_str} (${Y}Sisa: ${rem_hours} Jam${NC} / ${total_days} Hari)"
-        fi
-    fi
+    echo -e "${elapsed_str}"
 }
 
 while true; do
@@ -1042,6 +1071,12 @@ while true; do
     UPTIME_INFO=$(get_uptime_info)
 
     clear
+    echo -e "${C}┌──────────────────────────────────────┐${NC}"
+    printf "${C}│${NC}  Version     : %-22s${C}│${NC}\n" "SPv25.8.31"
+    printf "${C}│${NC}  Order By    : %-22s${C}│${NC}\n" "Premdigital"
+    printf "${C}│${NC}  Client Name : %-22s${C}│${NC}\n" "$CLIENT_NAME"
+    printf "${C}│${NC}  Expiry In   : %-22s${C}│${NC}\n" "$SISA_HARI Days"
+    echo -e "${C}└──────────────────────────────────────┘${NC}"
     echo -e "${C}======================================${NC}"
     echo -e "${Y}          PREMDIGITAL TUNNEL          ${NC}"
     echo -e "${C}======================================${NC}"
