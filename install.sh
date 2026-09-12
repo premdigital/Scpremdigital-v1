@@ -1085,7 +1085,7 @@ while true; do
     echo -e " UPTIME     : $UPTIME_INFO"
     echo -e "${C}======================================${NC}"
     echo -e "${C}┌──────────────────────────────────────┐${NC}"
-    printf "${C}│${NC}  Version     : %-22s${C}│${NC}\n" "SPv25.8.31"
+    printf "${C}│${NC}  Version     : %-22s${C}│${NC}\n" "SPv26.8.15"
     printf "${C}│${NC}  Order By    : %-22s${C}│${NC}\n" "Premdigital"
     printf "${C}│${NC}  Client Name : %-22s${C}│${NC}\n" "$CLIENT_NAME"
     printf "${C}│${NC}  Expiry In   : %-22s${C}│${NC}\n" "$SISA_HARI Days"
