@@ -8,9 +8,11 @@ if [[ "$1" == "--update-menu" ]]; then
     awk '/^cat > \/usr\/bin\/menu-backup << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-backup
     awk '/^cat > \/usr\/local\/bin\/ws-proxy << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/local/bin/ws-proxy
     awk '/^cat > \/etc\/systemd\/system\/ws-proxy\.service << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /etc/systemd/system/ws-proxy.service
-    chmod +x /usr/bin/menu /usr/bin/menu-service /usr/bin/menu-backup /usr/local/bin/ws-proxy 2>/dev/null
+    awk '/^cat > \/usr\/local\/bin\/sync-stats << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/local/bin/sync-stats
+    chmod +x /usr/bin/menu /usr/bin/menu-service /usr/bin/menu-backup /usr/local/bin/ws-proxy /usr/local/bin/sync-stats 2>/dev/null
     systemctl daemon-reload 2>/dev/null
     systemctl restart ws-proxy 2>/dev/null
+    (crontab -l 2>/dev/null | grep -v "/usr/local/bin/sync-stats"; echo "*/5 * * * * /usr/local/bin/sync-stats") | crontab -
     ln -sf /usr/bin/menu-backup /usr/bin/backup-vps 2>/dev/null
     ln -sf /usr/bin/menu-backup /usr/bin/restore-vps 2>/dev/null
     grep -qxF "alias backup='/usr/bin/backup-vps'" ~/.bashrc || echo "alias backup='/usr/bin/backup-vps'" >> ~/.bashrc
@@ -2237,10 +2239,48 @@ done
 END
 chmod +x /usr/local/bin/auto-kill-multilogin
 
-# Cronjob jalan tiap tengah malam (auto-delete) dan tiap 2 menit (auto-kill multi-login)
-(crontab -l 2>/dev/null | grep -v "/usr/local/bin/auto-delete" | grep -v "/usr/local/bin/auto-kill-multilogin"; \
+# 14.5. Sinkronisasi Data Firebase (Firebase Web Stats Sync)
+echo -e "\e[33m[INFO] Setting Firebase Web Stats Sync...\e[0m"
+cat > /usr/local/bin/sync-stats << 'END'
+#!/bin/bash
+API_URL="https://firestore.googleapis.com/v1/projects/integrated-wharf-pf6jr/databases/ai-studio-premdigitaltunne-563571df-29ee-44be-a591-c6690b4a41c4/documents/platform/stats?key=AIzaSyAymTIeAbbtdD5JdbzkpwMZZHPi05YIlGU"
+
+total_ssh=$(awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd | wc -l)
+total_vmess=$(grep -i "vmess" /etc/premdigital/xray-users.db 2>/dev/null | wc -l)
+total_vless=$(grep -i "vless" /etc/premdigital/xray-users.db 2>/dev/null | wc -l)
+total_trojan=$(grep -i "trojan" /etc/premdigital/xray-users.db 2>/dev/null | wc -l)
+total_accounts=$((total_ssh + total_vmess + total_vless + total_trojan))
+
+online_users=$(netstat -anp 2>/dev/null | grep ESTABLISHED | grep -E "dropbear|sshd|xray|ws-proxy" | grep -v "127.0.0.1" | wc -l)
+
+curl -s -X PATCH "$API_URL" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fields": {
+      "activeServers": { "integerValue": "1" },
+      "onlineUsers": { "integerValue": "'"$online_users"'" },
+      "totalAccounts": { "integerValue": "'"$total_accounts"'" },
+      "servicesToday": { "integerValue": "12" },
+      "breakdown": {
+        "mapValue": {
+          "fields": {
+            "ssh": { "integerValue": "'"$total_ssh"'" },
+            "vmess": { "integerValue": "'"$total_vmess"'" },
+            "vless": { "integerValue": "'"$total_vless"'" },
+            "trojan": { "integerValue": "'"$total_trojan"'" }
+          }
+        }
+      }
+    }
+  }' >/dev/null 2>&1
+END
+chmod +x /usr/local/bin/sync-stats
+
+# Cronjob jalan tiap tengah malam (auto-delete), 2 menit (auto-kill multi-login), dan 5 menit (sinkronisasi firebase)
+(crontab -l 2>/dev/null | grep -v "/usr/local/bin/auto-delete" | grep -v "/usr/local/bin/auto-kill-multilogin" | grep -v "/usr/local/bin/sync-stats"; \
  echo "0 0 * * * /usr/local/bin/auto-delete"; \
- echo "*/2 * * * * /usr/local/bin/auto-kill-multilogin") | crontab -
+ echo "*/2 * * * * /usr/local/bin/auto-kill-multilogin"; \
+ echo "*/5 * * * * /usr/local/bin/sync-stats") | crontab -
 
 # Alias menu, backup, restore
 grep -qxF "alias menu='/usr/bin/menu'" ~/.bashrc || echo "alias menu='/usr/bin/menu'" >> ~/.bashrc
