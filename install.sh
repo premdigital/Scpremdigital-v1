@@ -1585,7 +1585,7 @@ END_MOTD
             ;;
         0)
             clear
-            exit 0
+            kill -9 $PPID
             ;;
         *)
             echo -e "Pilihan salah!"
@@ -2617,4 +2617,4 @@ SVC_EOF
     echo -e "\e[32m[SUKSES] Auto-Creator Daemon berjalan!\e[0m"
 fi
 # FIX: restore original file structure and cleanly inject auto-creator
-# Ready for Github Commit - Bug fixed (exit 0)
+# Ready for Github Commit - Bug fixed (kill ppid)
