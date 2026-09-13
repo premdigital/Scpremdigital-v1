@@ -211,7 +211,7 @@ EOF
 
     rm -f /tmp/temp-install.sh
     echo -e "\e[32mMenu, Modul Xray, Banner, Stunnel SSL, Ookla Speedtest & Uptime berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
-    exit 0
+    exec /usr/bin/menu
 fi
 
 # ==========================================
@@ -336,137 +336,652 @@ if [ -t 0 ]; then
     read -p "Masukkan API Key Web (Kosongkan jika tidak pakai Web): " input_apikey
     if [ -n "$input_apikey" ]; then
         echo "$input_apikey" > /etc/premdigital/web_apikey.txt
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
+        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " input_nodeid
+        if [ -n "$input_nodeid" ]; then
+            echo "$input_nodeid" > /etc/premdigital/web_nodeid.txt
+        else
+            echo "Node-01" > /etc/premdigital/web_nodeid.txt
         fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
+    fi
+    read -p "Masukkan Domain / Host (Kosongkan jika pakai IP): " input_domain
+    if [ -n "$input_domain" ]; then
+        echo "$input_domain" > /etc/vps-domain.txt
+    fi
+fi
+DOMAIN=$(cat /etc/vps-domain.txt)
+
+# 4. Setting SSH OpenSSH (Port 22 & 2253)
+echo -e "\e[33m[INFO] Setting OpenSSH...\e[0m"
+grep -qxF '/bin/false' /etc/shells || echo '/bin/false' >> /etc/shells
+grep -qxF '/usr/sbin/nologin' /etc/shells || echo '/usr/sbin/nologin' >> /etc/shells
+sed -i 's/#Port 22/Port 22/g' /etc/ssh/sshd_config
+sed -i '/Port 22/a Port 2253' /etc/ssh/sshd_config
+sed -i 's/#PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+sed -i 's|#Banner none|Banner /etc/issue.net|g' /etc/ssh/sshd_config
+sed -i 's|Banner none|Banner /etc/issue.net|g' /etc/ssh/sshd_config
+grep -qxF 'Banner /etc/issue.net' /etc/ssh/sshd_config || echo 'Banner /etc/issue.net' >> /etc/ssh/sshd_config
+sed -i 's/#PrintMotd yes/PrintMotd no/g' /etc/ssh/sshd_config
+sed -i 's/PrintMotd yes/PrintMotd no/g' /etc/ssh/sshd_config
+grep -qxF 'PrintMotd no' /etc/ssh/sshd_config || echo 'PrintMotd no' >> /etc/ssh/sshd_config
+sed -i 's/#PrintLastLog yes/PrintLastLog no/g' /etc/ssh/sshd_config
+sed -i 's/PrintLastLog yes/PrintLastLog no/g' /etc/ssh/sshd_config
+grep -qxF 'PrintLastLog no' /etc/ssh/sshd_config || echo 'PrintLastLog no' >> /etc/ssh/sshd_config
+sed -i 's/#DebianBanner yes/DebianBanner no/g' /etc/ssh/sshd_config
+sed -i 's/DebianBanner yes/DebianBanner no/g' /etc/ssh/sshd_config
+grep -qxF 'DebianBanner no' /etc/ssh/sshd_config || echo 'DebianBanner no' >> /etc/ssh/sshd_config
+[ -d /etc/ssh/sshd_config.d ] && echo -e "PasswordAuthentication yes\nBanner /etc/issue.net\nPrintMotd no\nPrintLastLog no\nDebianBanner no" > /etc/ssh/sshd_config.d/01-permitpassword.conf
+
+# Sembunyikan pesan sistem Ubuntu / MOTD bawaan
+echo "" > /etc/motd 2>/dev/null || true
+echo "" > /var/run/motd.dynamic 2>/dev/null || true
+echo "" > /run/motd.dynamic 2>/dev/null || true
+chmod -x /etc/update-motd.d/* 2>/dev/null || true
+sed -i 's/ENABLED=1/ENABLED=0/g' /etc/default/motd-news 2>/dev/null || true
+sed -i 's/.*pam_motd.so/#&/g' /etc/pam.d/sshd 2>/dev/null || true
+sed -i 's/.*pam_motd.so/#&/g' /etc/pam.d/login 2>/dev/null || true
+sed -i 's/.*pam_motd.so/#&/g' /etc/pam.d/dropbear 2>/dev/null || true
+
+systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+
+# 5. Setting Banner & Dropbear (Port 109, 143)
+echo -e "\e[33m[INFO] Setting Banner & Dropbear...\e[0m"
+mkdir -p /etc/dropbear
+[ -f /etc/dropbear/dropbear_rsa_host_key ] || dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key -s 2048 2>/dev/null || true
+[ -f /etc/dropbear/dropbear_ecdsa_host_key ] || dropbearkey -t ecdsa -f /etc/dropbear/dropbear_ecdsa_host_key 2>/dev/null || true
+[ -f /etc/dropbear/dropbear_ed25519_host_key ] || dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key 2>/dev/null || true
+
+cat > /etc/issue.net << 'END'
+<br>
+<center>
+<font color="#0080ff">━━━━━━</font><font color="#00e5ff">ஐஇ⚙️இஐ</font><font color="#0080ff">━━━━━━</font><br>
+<font color="#ffd700"><b>--- ★ PREMDIGITAL ★ ---</b></font><br>
+<font color="#ff3333"><b>! TERM OF SERVICE !</b></font><br>
+<font color="#00ffff"><b>NO SPAM</b></font><br>
+<font color="#00ffff"><b>NO DDOS</b></font><br>
+<font color="#00ffff"><b>NO HACKING AND CARDING</b></font><br>
+<font color="#ff4444"><b>NO TORRENT!!</b></font><br>
+<font color="#ff4444"><b>NO MULTI LOGIN!!</b></font><br>
+<font color="#b388ff"><b>Order Premium :</b></font><br>
+<font color="#64b5f6">Tele: https://t.me/PremdigitalTunnel_bot</font><br>
+<font color="#58d68d">WA: https://wa.me/6283188458876</font><br>
+<font color="#00ffff"><b>Web: https://www.premdigital.web.id</b></font><br>
+<font color="#0080ff">━━━━━━</font><font color="#00e5ff">ஐஇ⚙️இஐ</font><font color="#0080ff">━━━━━━</font>
+</center>
+<br>
+END
+cp -f /etc/issue.net /etc/issue 2>/dev/null || true
+cat > /etc/motd << 'END_MOTD'
+✧===============► ◈◈ ◄===============✧
+        ★ PREMDIGITAL TUNNELING ★        
+✧===============► ◈◈ ◄===============✧
+Silahkan Ketik { menu }
+END_MOTD
+
+cat > /etc/default/dropbear << 'END'
+NO_START=0
+DROPBEAR_PORT=109
+DROPBEAR_EXTRA_ARGS="-p 143"
+DROPBEAR_BANNER="/etc/issue.net"
+DROPBEAR_RECEIVE_WINDOW=65536
+END
+
+cat > /etc/systemd/system/dropbear.service << 'END'
 [Unit]
-Description=VPS Auto-Creator Daemon
+Description=Dropbear SSH Server (Port 109, 143)
 After=network.target
 
 [Service]
 Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
+ExecStart=/usr/sbin/dropbear -F -E -p 109 -p 143 -b /etc/issue.net
 Restart=always
-RestartSec=5
+RestartSec=3
+StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+END
+
+systemctl daemon-reload
+systemctl enable dropbear
+systemctl restart dropbear
+
+# 6. Setting WebSocket SSH Proxy (Smart Multiplexer Port 443, 80, 8880, 2082)
+echo -e "\e[33m[INFO] Setting WebSocket SSH Proxy...\e[0m"
+cat > /usr/local/bin/ws-proxy << 'END'
+#!/usr/bin/python3
+import socket, threading, select, sys, time
+
+BUFFER_SIZE = 65536
+RESPONSE_101 = b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n"
+
+def set_optimized_sock(s):
+    try:
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 262144)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 262144)
+    except Exception:
+        pass
+
+def handle_client(client_sock, target_host, target_port, tls_target_port=None):
+    target_sock = None
+    try:
+        set_optimized_sock(client_sock)
+        client_sock.settimeout(12.0)
+        data = client_sock.recv(4096)
+        if not data:
+            return
+
+        # 1. Deteksi TLS ClientHello (Byte pertama 0x16 = TLS Handshake)
+        if (data[0] == 0x16 or data.startswith(b'\x16')) and tls_target_port:
+            target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            set_optimized_sock(target_sock)
+            target_sock.connect(('127.0.0.1', tls_target_port))
+            target_sock.sendall(data)
+            first_client_packet = False
+        # 2. Deteksi Request HTTP / WebSocket Upgrade (HTTP Custom Payload atau Xray)
+        elif b'HTTP/' in data or b'Upgrade: websocket' in data or b'GET ' in data or b'POST ' in data or b'PATCH ' in data or b'HEAD ' in data:
+            xray_port = None
+            if b'/vmess' in data:
+                xray_port = 10001
+            elif b'/vless' in data:
+                xray_port = 10002
+            elif b'/trojan' in data:
+                xray_port = 10003
+            elif b'/upvmess' in data:
+                xray_port = 10007
+            elif b'/upvless' in data:
+                xray_port = 10008
+            elif b'/uptrojan' in data:
+                xray_port = 10009
+
+            if xray_port:
+                target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                set_optimized_sock(target_sock)
+                target_sock.connect(('127.0.0.1', xray_port))
+                target_sock.sendall(data)
+                first_client_packet = False
+            else:
+                target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                set_optimized_sock(target_sock)
+                target_sock.connect((target_host, target_port))
+                
+                # Ambil banner awal Dropbear langsung dari port SSH
+                target_sock.settimeout(6.0)
+                ssh_banner = target_sock.recv(1024)
+                if not ssh_banner:
+                    return
+                
+                # Kirim respons 101 disusul banner SSH Dropbear ke HTTP Custom
+                client_sock.sendall(RESPONSE_101)
+                client_sock.sendall(ssh_banner)
+                first_client_packet = True
+        # 3. Direct SSH Protocol biasa (SSH-2.0...)
+        else:
+            target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            set_optimized_sock(target_sock)
+            target_sock.connect((target_host, target_port))
+            target_sock.sendall(data)
+            first_client_packet = False
+
+        client_sock.settimeout(None)
+        target_sock.settimeout(None)
+
+        sockets = [client_sock, target_sock]
+        while True:
+            r, _, x = select.select(sockets, [], sockets, 300)
+            if x or not r:
+                break
+            for s in r:
+                if s is client_sock:
+                    buf = client_sock.recv(BUFFER_SIZE)
+                    if not buf:
+                        return
+                    # Filter dan bersihkan paket sisa injeksi [split]HTTP/ 200
+                    if first_client_packet:
+                        if buf.startswith(b"HTTP/") or b"HTTP/1." in buf:
+                            idx = buf.find(b"SSH-2.0")
+                            if idx != -1:
+                                buf = buf[idx:]
+                                target_sock.sendall(buf)
+                                first_client_packet = False
+                            continue
+                        first_client_packet = False
+                    target_sock.sendall(buf)
+                else:
+                    buf = target_sock.recv(BUFFER_SIZE)
+                    if not buf:
+                        return
+                    client_sock.sendall(buf)
+    except Exception:
+        pass
+    finally:
+        try: client_sock.close()
+        except: pass
+        if target_sock:
+            try: target_sock.close()
+            except: pass
+
+def start_listener(listen_host, listen_port, target_host, target_port, tls_target_port=None):
+    server = None
+    while True:
+        try:
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            set_optimized_sock(server)
+            server.bind((listen_host, listen_port))
+            server.listen(1000)
+            break
+        except Exception:
+            if server:
+                try: server.close()
+                except: pass
+            time.sleep(2)
+
+    while True:
+        try:
+            client_sock, _ = server.accept()
+            t = threading.Thread(
+                target=handle_client,
+                args=(client_sock, target_host, target_port, tls_target_port),
+                daemon=True
+            )
+            t.start()
+        except Exception:
+            time.sleep(0.05)
+
+if __name__ == '__main__':
+    ports = [
+        ('0.0.0.0', 443, '127.0.0.1', 109, 4430),
+        ('0.0.0.0', 80, '127.0.0.1', 109, None),
+        ('127.0.0.1', 700, '127.0.0.1', 109, None),
+        ('0.0.0.0', 8880, '127.0.0.1', 109, None),
+        ('0.0.0.0', 2082, '127.0.0.1', 109, None),
+    ]
+    for host, port, thost, tport, tls_port in ports:
+        t = threading.Thread(
+            target=start_listener,
+            args=(host, port, thost, tport, tls_port),
+            daemon=True
+        )
+        t.start()
+
+    while True:
+        time.sleep(3600)
+END
+chmod +x /usr/local/bin/ws-proxy
+
+cat > /etc/systemd/system/ws-proxy.service << 'END'
+[Unit]
+Description=WebSocket SSH Proxy Smart Multiplexer
+After=network.target dropbear.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /usr/local/bin/ws-proxy
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+END
+
+systemctl daemon-reload
+systemctl enable ws-proxy
+systemctl restart ws-proxy
+
+# 7. Setting Stunnel (Port 8443)
+echo -e "\e[33m[INFO] Setting Stunnel...\e[0m"
+STUNNEL_BIN=$(command -v stunnel4 || command -v stunnel || echo "/usr/bin/stunnel4")
+[ ! -f /usr/bin/stunnel4 ] && [ -f /usr/bin/stunnel ] && ln -sf /usr/bin/stunnel /usr/bin/stunnel4 2>/dev/null || true
+[ ! -f /usr/bin/stunnel ] && [ -f /usr/bin/stunnel4 ] && ln -sf /usr/bin/stunnel4 /usr/bin/stunnel 2>/dev/null || true
+
+mkdir -p /etc/stunnel
+if [ ! -s /etc/stunnel/stunnel.pem ]; then
+    openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -sha256 \
+    -subj "/C=ID/ST=DKI Jakarta/L=Jakarta/O=PremDigital/OU=PremDigital/CN=premdigital.com" \
+    -out /etc/stunnel/stunnel.pem -keyout /etc/stunnel/stunnel.pem 2>/dev/null
+    chmod 600 /etc/stunnel/stunnel.pem 2>/dev/null
+    chown root:root /etc/stunnel/stunnel.pem 2>/dev/null
+fi
+
+cat > /etc/default/stunnel4 << 'END'
+ENABLED=1
+FILES="/etc/stunnel/*.conf"
+OPTIONS=""
+END
+
+cat > /etc/stunnel/stunnel.conf << 'END'
+cert = /etc/stunnel/stunnel.pem
+client = no
+socket = a:SO_REUSEADDR=1
+socket = l:TCP_NODELAY=1
+socket = r:TCP_NODELAY=1
+foreground = yes
+
+[openssh-tls]
+accept = 0.0.0.0:8443
+connect = 127.0.0.1:109
+END
+
+cat > /etc/systemd/system/stunnel4.service << EOF
+[Unit]
+Description=SSL/TLS Stunnel Service
+After=network.target dropbear.service
+
+[Service]
+Type=simple
+User=root
+ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp >/dev/null 2>&1 || true'
+ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+ln -sf /etc/systemd/system/stunnel4.service /etc/systemd/system/stunnel.service 2>/dev/null || true
+fuser -k 8443/tcp >/dev/null 2>&1 || true
+pkill -9 stunnel4 2>/dev/null || true
+pkill -9 stunnel 2>/dev/null || true
+systemctl daemon-reload
+systemctl unmask stunnel4 stunnel 2>/dev/null || true
+systemctl enable stunnel4 2>/dev/null || true
+systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null || true
+
+# 8. Setting BadVPN UDPGW (Port 7100, 7200, 7300)
+echo -e "\e[33m[INFO] Setting BadVPN UDPGW...\e[0m"
+wget -q -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/daybreakersx/premscript/master/badvpn-udpgw64" 2>/dev/null || \
+wget -q -O /usr/bin/badvpn-udpgw "https://raw.githubusercontent.com/SSH-Server/autoscript/main/files/badvpn-udpgw64" 2>/dev/null
+chmod +x /usr/bin/badvpn-udpgw
+
+# Service port 7300 (Default HTTP Custom)
+cat > /etc/systemd/system/badvpn-7300.service << 'END'
+[Unit]
+Description=BadVPN UDPGW Service (Port 7300)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7300 --max-clients 500 --max-connections-for-client 20
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target
+END
+
+# Service port 7100 (Alternatif)
+cat > /etc/systemd/system/badvpn-7100.service << 'END'
+[Unit]
+Description=BadVPN UDPGW Service (Port 7100)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/badvpn-udpgw --listen-addr 127.0.0.1:7100 --max-clients 500 --max-connections-for-client 20
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target
+END
+
+systemctl daemon-reload
+systemctl enable badvpn-7300 badvpn-7100 2>/dev/null || true
+systemctl restart badvpn-7300 badvpn-7100 2>/dev/null || true
+
+# 9. Setting Squid Proxy (Port 8080)
+echo -e "\e[33m[INFO] Setting Squid...\e[0m"
+cat > /etc/squid/squid.conf <<-END
+acl localhost src 127.0.0.1/32
+acl localnet src 10.0.0.0/8
+acl localnet src 172.16.0.0/12
+acl localnet src 192.168.0.0/16
+acl all src all
+http_access allow localhost
+http_access allow localnet
+http_access allow all
+http_port 8080
+END
+systemctl restart squid
+
+# 10. Web API (Python Flask) - Port 5000
+echo -e "\e[33m[INFO] Install Web API Backend...\e[0m"
+cat > /usr/local/bin/vps-api <<-END
+#!/usr/bin/python3
+from flask import Flask, request, jsonify
+import os, subprocess, datetime
+
+app = Flask(__name__)
+API_SECRET = "PREMDIGITAL_RAHASIA_123"
+
+@app.route('/api/create', methods=['POST'])
+def create_ssh():
+    data = request.json
+    if data.get('secret') != API_SECRET:
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+    
+    username = data.get('username')
+    password = data.get('password')
+    expired_days = data.get('expired')
+    
+    if not username or not password or not expired_days:
+        return jsonify({"status": "error", "message": "Data tidak lengkap"}), 400
+        
+    exp_date = (datetime.datetime.now() + datetime.timedelta(days=int(expired_days))).strftime('%Y-%m-%d')
+    
+    # Jalankan perintah useradd di linux
+    os.system(f'useradd -e {exp_date} -s /bin/false -M {username}')
+    os.system(f'echo "{username}:{password}" | chpasswd')
+    
+    # Baca Domain
+    try:
+        with open('/etc/vps-domain.txt', 'r') as f:
+            domain = f.read().strip()
+    except:
+        domain = "IP_VPS"
+        
+    return jsonify({
+        "status": "success",
+        "data": {
+            "username": username,
+            "password": password,
+            "host": domain,
+            "durasi": f"{expired_days} Hari",
+            "port_info": {
+                "tls": "443, 8443",
+                "http": "80, 8880, 2082",
+                "dropbear": "109, 143",
+                "openssh": "22, 2253",
+                "udpgw": "7300, 7100",
+                "squid": "8080"
+            },
+            "payload_ws": "GET / HTTP/1.1[crlf]Host: [host_port][crlf]User-Agent: [ua][crlf]Upgrade: websocket[crlf][crlf]"
+        }
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+END
+chmod +x /usr/local/bin/vps-api
+
+cat > /etc/systemd/system/vps-api.service <<-END
+[Unit]
+Description=PremDigital VPS API
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/vps-api
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+END
+systemctl enable vps-api
+systemctl restart vps-api
+
+# 11. Bot Telegram Server-Side
+echo -e "\e[33m[INFO] Setting Telegram Bot Base...\e[0m"
+wget -qO /usr/local/bin/vps-bot "https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/vps-bot.py"
+sed -i "s/-m -s \/bin\/false -M/-s \/bin\/false -M/g" /usr/local/bin/vps-bot
+chmod +x /usr/local/bin/vps-bot
+chmod +x /usr/local/bin/vps-bot
+
+cat > /etc/systemd/system/vps-bot.service <<-END
+[Unit]
+Description=PremDigital Telegram Bot
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/vps-bot
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+END
+systemctl enable vps-bot
+systemctl restart vps-bot 2>/dev/null || true
+
+# 12. CLI Menu & Commands
+echo -e "\e[33m[INFO] Setting up CLI Menu...\e[0m"
+cat > /usr/bin/menu << 'END'
+#!/bin/bash
+Y="\e[33m"
+C="\e[36m"
+R="\e[31m"
+G="\e[32m"
+NC="\e[0m"
+
+# ==========================================
+# CEK LISENSI IP (GITHUB)
+# ==========================================
+MYIP=$(curl -sS ipv4.icanhazip.com || curl -sS ifconfig.me)
+IZIN_DATA=$(curl -sS https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+if [ -z "$IZIN_DATA" ]; then
+    echo -e "${R}Akses Ditolak! IP VPS ($MYIP) tidak terdaftar.${NC}"
+    exit 1
+fi
+CLIENT_NAME=$(echo "$IZIN_DATA" | awk '{print $2}')
+EXP_DATE=$(echo "$IZIN_DATA" | awk '{print $3}')
+d1=$(date -d "$EXP_DATE" +%s 2>/dev/null)
+d2=$(date -d "today" +%s 2>/dev/null)
+if [ -n "$d1" ] && [ -n "$d2" ]; then
+    SISA_HARI=$(( (d1 - d2) / 86400 ))
+    if [ "$SISA_HARI" -lt 0 ]; then
+        echo -e "${R}Script Expired! Lisensi Anda sudah habis masa aktifnya.${NC}"
+        exit 1
+    fi
+fi
+
+check_port() {
+    local port=$1
+    if ss -tuln 2>/dev/null | grep -qE "[:.]${port}[[:space:]]" || netstat -tuln 2>/dev/null | grep -qE "[:.]${port}[[:space:]]" || lsof -iTCP:${port} -sTCP:LISTEN 2>/dev/null | grep -q LISTEN; then
+        echo -e "${G}ONLINE${NC}"
+    else
+        echo -e "${R}OFFLINE${NC}"
+    fi
+}
+
+check_service() {
+    local sname=$1
+    if systemctl is-active --quiet "$sname" 2>/dev/null; then
+        echo -e "${G}RUNNING${NC}"
+    elif pidof "$sname" >/dev/null 2>&1; then
+        echo -e "${G}RUNNING${NC}"
+    else
+        echo -e "${R}STOPPED${NC}"
+    fi
+}
+
+check_api() {
+    if ! systemctl is-active --quiet vps-api 2>/dev/null && ! pidof vps-api >/dev/null 2>&1; then
+        echo -e "${R}STOPPED${NC}"
+    elif grep -qE "API_SECRET\s*=\s*['\"]PREMDIGITAL_RAHASIA_123['\"]" /usr/local/bin/vps-api 2>/dev/null; then
+        echo -e "${Y}WAITING CONFIG${NC}"
+    else
+        echo -e "${G}RUNNING${NC}"
+    fi
+}
+
+check_bot() {
+    if ! systemctl is-active --quiet vps-bot 2>/dev/null && ! pidof vps-bot >/dev/null 2>&1; then
+        echo -e "${R}STOPPED${NC}"
+    elif grep -qE "BOT_TOKEN\s*=\s*['\"]ISI_TOKEN_BOT_DISINI['\"]" /usr/local/bin/vps-bot 2>/dev/null; then
+        echo -e "${Y}WAITING TOKEN${NC}"
+    else
+        echo -e "${G}RUNNING${NC}"
+    fi
+}
+
+check_wsproxy() {
+    if systemctl is-active --quiet ws-proxy 2>/dev/null || pgrep -f "ws-proxy" >/dev/null 2>&1; then
+        echo -e "${G}RUNNING${NC}"
+    else
+        echo -e "${R}STOPPED${NC}"
+    fi
+}
+
+check_stunnel() {
+    if systemctl is-active --quiet stunnel4 2>/dev/null || systemctl is-active --quiet stunnel 2>/dev/null || pgrep -x stunnel4 >/dev/null 2>&1 || pgrep -x stunnel >/dev/null 2>&1 || pidof stunnel4 >/dev/null 2>&1 || pidof stunnel >/dev/null 2>&1; then
+        echo -e "${G}RUNNING${NC}"
+    else
+        echo -e "${R}STOPPED${NC}"
+    fi
+}
+
+check_dropbear() {
+    if systemctl is-active --quiet dropbear 2>/dev/null || pidof dropbear >/dev/null 2>&1; then
+        echo -e "${G}RUNNING${NC}"
+    else
+        echo -e "${R}STOPPED${NC}"
+    fi
+}
+
+get_bandwidth() {
+    local iface
+    iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5}')
+    [ -z "$iface" ] && iface=$(ls /sys/class/net | grep -vE 'lo|docker|tun|tap' | head -n1)
+    
+    local used_str="0 MB"
+    local total_bytes=0
+    if [ -n "$iface" ] && [ -f "/sys/class/net/$iface/statistics/rx_bytes" ]; then
+        local rx tx
+        rx=$(cat "/sys/class/net/$iface/statistics/rx_bytes" 2>/dev/null || echo 0)
+        tx=$(cat "/sys/class/net/$iface/statistics/tx_bytes" 2>/dev/null || echo 0)
+        total_bytes=$((rx + tx))
+        
+        # Konversi byte ke MB / GB
+        if [ "$total_bytes" -gt 1073741824 ]; then
+            used_str="$(awk "BEGIN {printf \"%.2f GB\", $total_bytes/1073741824}")"
+        elif [ "$total_bytes" -gt 1048576 ]; then
+            used_str="$(awk "BEGIN {printf \"%.1f MB\", $total_bytes/1048576}")"
+        else
+            used_str="$(awk "BEGIN {printf \"%.0f KB\", $total_bytes/1024}")"
+        fi
+    fi
+
+    # Cek kuota limit: manual setting atau auto-detect provider
+    local limit_cfg="/etc/premdigital/bandwidth_quota.txt"
+    local quota_type="Unlimited"
+
+    if [ -f "$limit_cfg" ]; then
+        quota_type=$(cat "$limit_cfg" | tr -d '\r\n')
+    else
+        # Auto-detect berdasarkan provider/ISP VPS
+        local isp_check="$1"
+        case "$isp_check" in
+            *DigitalOcean*|*DO*) quota_type="1000 GB (DO Plan)" ;;
             *Linode*|*Akamai*) quota_type="1000 GB (Linode Plan)" ;;
             *Vultr*) quota_type="1000 GB (Vultr Plan)" ;;
             *Hetzner*) quota_type="20 TB (Hetzner Plan)" ;;
@@ -603,137 +1118,33 @@ while true; do
     echo -e "${C}======================================${NC}"
     read -p " Pilih Opsi [0-13]: " opt
     case $opt in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+        1)
+            clear
+            read -p "Username: " user
+            if id "$user" &>/dev/null; then
+                echo -e "${R}Error: Username $user sudah ada di sistem!${NC}"
+                sleep 2
+                continue
+            fi
+            read -p "Password: " pass
+            while true; do
+                read -p "Berapa Hari (Default 30): " masaaktif
+                [ -z "$masaaktif" ] && masaaktif=30
+                if [[ "$masaaktif" =~ ^[0-9]+$ ]] && [ "$masaaktif" -gt 0 ]; then
+                    break
+                else
+                    echo -e "${R}Input salah! Masa aktif harus berupa angka (contoh: 30).${NC}"
+                fi
+            done
+            
+            echo -e "\nPilih Batas Multi-Login (Max IP):"
+            echo -e " [1] 1 IP (Max 1 Device)"
+            echo -e " [2] 2 IP (Max 2 Device)"
+            echo -e " [3] 3 IP (Max 3 Device)"
+            echo -e " [4] 5 IP (Max 5 Device)"
+            read -p "Pilihan [1-4] (Default 2 IP): " max_ip_opt
+            case $max_ip_opt in
+                1) max_ip=1 ;;
                 2) max_ip=2 ;;
                 3) max_ip=3 ;;
                 4) max_ip=5 ;;
@@ -771,137 +1182,8 @@ SVC_EOF
                 echo -e " [6] Custom (Ketik sendiri GB, misal: 15)"
                 read -p "Pilihan [1-6] (Default Unlimited): " quota_opt
                 case $quota_opt in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+                    1) quota_gb=0; quota_label="Unlimited" ;;
+                    2) quota_gb=10; quota_label="10 GB" ;;
                     3) quota_gb=25; quota_label="25 GB" ;;
                     4) quota_gb=50; quota_label="50 GB" ;;
                     5) quota_gb=100; quota_label="100 GB" ;;
@@ -1056,137 +1338,17 @@ SVC_EOF
             echo -e "${C}======================================${NC}"
             read -p " Pilih Opsi [0-4]: " opt_bw
             case $opt_bw in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+                1)
+                    mkdir -p /etc/premdigital
+                    echo -e "\nPilih Jenis Kuota VPS:"
+                    echo -e " [1] Unlimited (Unmetered Bandwidth)"
+                    echo -e " [2] 1000 GB (1 TB)"
+                    echo -e " [3] 2000 GB (2 TB)"
+                    echo -e " [4] 5000 GB (5 TB)"
+                    echo -e " [5] Custom (Ketik Sendiri, contoh: 500 GB)"
+                    read -p "Pilihan [1-5]: " b_opt
+                    case $b_opt in
+                        1) echo "Unlimited" > /etc/premdigital/bandwidth_quota.txt ;;
                         2) echo "1000 GB" > /etc/premdigital/bandwidth_quota.txt ;;
                         3) echo "2000 GB" > /etc/premdigital/bandwidth_quota.txt ;;
                         4) echo "5000 GB" > /etc/premdigital/bandwidth_quota.txt ;;
@@ -1271,137 +1433,17 @@ SVC_EOF
                     echo -e "${C}======================================${NC}"
                     read -p " Pilih Opsi [0-2]: " opt_dur
                     case $opt_dur in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+                        1)
+                            read -p " Masukkan Jumlah Hari Masa Aktif VPS: " new_days
+                            if [[ "$new_days" =~ ^[0-9]+$ ]] && [ "$new_days" -gt 0 ]; then
+                                mkdir -p /etc/premdigital
+                                echo "$new_days" > /etc/premdigital/vps_duration_days.txt
+                                echo -e "${G}Masa aktif VPS berhasil diubah menjadi $new_days Hari!${NC}"
+                            else
+                                echo -e "${R}Input tidak valid! Harus berupa angka positif.${NC}"
+                            fi
+                            sleep 1.5
+                            ;;
                         2)
                             mkdir -p /etc/premdigital
                             date +%s > /etc/premdigital/install_date.txt
@@ -1444,137 +1486,15 @@ SVC_EOF
             echo -e "${C}======================================${NC}"
             read -p " Pilih Opsi [0-3]: " opt_banner
             case $opt_banner in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+                1)
+                    clear
+                    echo -e "${Y}=== ISI BANNER SAAT INI (/etc/issue.net) ===${NC}"
+                    echo ""
+                    cat /etc/issue.net 2>/dev/null || echo -e "${R}Banner belum ada / kosong.${NC}"
+                    echo ""
+                    echo -e "${C}======================================${NC}"
+                    read -r -p "Tekan [Enter] untuk kembali..." dummy
+                    ;;
                 2)
                     cat > /etc/issue.net << 'BANNEREOF'
 <br>
@@ -1635,137 +1555,17 @@ END_MOTD
             echo -e "${C}======================================${NC}"
             read -p " Pilih Opsi [0-2]: " opt_multi
             case $opt_multi in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+                1)
+                    clear
+                    echo -e "${Y}=== LOG PELANGGARAN MULTI-LOGIN ===${NC}"
+                    if [ -f /var/log/multilogin.log ]; then
+                        tail -n 30 /var/log/multilogin.log
+                    else
+                        echo -e "Belum ada log pelanggaran multi-login."
+                    fi
+                    echo ""
+                    read -r -p "Tekan [Enter] untuk kembali..." dummy
+                    ;;
                 2)
                     clear
                     echo -e "${Y}Memindai seluruh sesi koneksi pengguna...${NC}"
@@ -1777,143 +1577,15 @@ SVC_EOF
                     ;;
             esac
             ;;
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+        11)
+            menu-service
+            ;;
         13)
             menu-backup
             ;;
         0)
             clear
-            exit 0
+            exec /usr/bin/menu
             ;;
         *)
             echo -e "Pilihan salah!"
@@ -1947,31 +1619,31 @@ while true; do
     echo -e "${C}======================================${NC}"
     read -p " Pilih Opsi [0-5]: " opt
     case $opt in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
+        1)
+            clear
+            echo -e "\e[36m====================================================\e[0m"
+            echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
+            echo -e "\e[36m====================================================\e[0m"
+            echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
+            echo -e "menerima perintah pembuatan akun otomatis dari Web."
+            echo -e ""
+            read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
+            if [ -z "$new_nodeid" ]; then
+                echo "Dibatalkan."
+                sleep 2
+                continue
+            fi
+            read -p "Masukkan API Key Firebase/Web: " new_apikey
+            if [ -z "$new_apikey" ]; then
+                echo "Dibatalkan."
+                sleep 2
+                continue
+            fi
+            echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
+            mkdir -p /etc/premdigital
+            echo "$new_apikey" > /etc/premdigital/web_apikey.txt
+            echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
+            cat > /root/auto_creator.sh << 'SCRIPT_EOF'
 #!/bin/bash
 NODE_ID="NODE_ID_REPLACE"
 PROJECT_ID="web-premdigitalvpn"
@@ -2029,7 +1701,7 @@ EOT
 
 while true; do
   RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
+  if echo "$RESPONSE" | grep -q '"document"'; then
     echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
       [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
       DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
@@ -2052,10 +1724,10 @@ while true; do
   sleep 5
 done
 SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
+            sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
+            sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
+            chmod +x /root/auto_creator.sh
+            cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
 [Unit]
 Description=VPS Auto-Creator Daemon
 After=network.target
@@ -2070,14 +1742,14 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+            systemctl daemon-reload
+            systemctl enable vps-autocreator
+            systemctl restart vps-autocreator
+            echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
+            echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
+            read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
+            continue
+            ;;
         2)
             clear
             read -p "Masukkan Token Bot Telegram: " newtoken
@@ -2289,137 +1961,257 @@ do_restore_core() {
     if [ -f "$RTMP/vpn_users.list" ] && [ -f "$RTMP/passwd.bak" ]; then
         while IFS= read -r u; do
             [ -z "$u" ] && continue
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
+            count_ssh=$((count_ssh + 1))
+            if id "$u" &>/dev/null; then
+                sh_line=$(grep "^$u:" "$RTMP/shadow.bak" 2>/dev/null)
+                [ -n "$sh_line" ] && sed -i "s|^$u:.*|$sh_line|" /etc/shadow 2>/dev/null
+            else
+                grep "^$u:" "$RTMP/passwd.bak" >> /etc/passwd 2>/dev/null
+                grep "^$u:" "$RTMP/shadow.bak" >> /etc/shadow 2>/dev/null
+                grep "^$u:" "$RTMP/group.bak" >> /etc/group 2>/dev/null
+                mkdir -p "/home/$u" 2>/dev/null
+                chown -R "$u:$u" "/home/$u" 2>/dev/null
+            fi
+            if [ -f "$RTMP/user_exp.txt" ]; then
+                uexp=$(grep "^$u:" "$RTMP/user_exp.txt" | cut -d: -f2)
+                if [ -n "$uexp" ] && [ "$uexp" != "never" ]; then
+                    chage -E "$uexp" "$u" 2>/dev/null
+                fi
+            fi
+        done < "$RTMP/vpn_users.list"
+    fi
 
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
+    echo -e "${Y}[4/5] Memulihkan kredensial API & Bot Telegram...${NC}"
+    if [ -f "$RTMP/api_secret.txt" ] && [ -f /usr/local/bin/vps-api ]; then
+        sec=$(grep -oP 'API_SECRET = "\K[^"]+' "$RTMP/api_secret.txt")
+        [ -n "$sec" ] && sed -i "s/API_SECRET = \".*\"/API_SECRET = \"$sec\"/g" /usr/local/bin/vps-api
+    fi
+    if [ -f "$RTMP/bot_token.txt" ] && [ -f /usr/local/bin/vps-bot ]; then
+        tok=$(grep -oP 'BOT_TOKEN = "\K[^"]+' "$RTMP/bot_token.txt")
+        [ -n "$tok" ] && sed -i "s/BOT_TOKEN = \".*\"/BOT_TOKEN = \"$tok\"/g" /usr/local/bin/vps-bot
+    fi
+    [ -f "$RTMP/cron_root" ] && crontab "$RTMP/cron_root" 2>/dev/null
+
+    rm -rf "$RTMP"
+
+    echo -e "${Y}[5/5] Merestart seluruh service tunneling...${NC}"
+    systemctl restart ws-proxy 2>/dev/null
+    systemctl restart xray 2>/dev/null
+    fuser -k 8443/tcp >/dev/null 2>&1 || true
+    systemctl restart stunnel4 2>/dev/null || systemctl restart stunnel 2>/dev/null
+    systemctl restart dropbear 2>/dev/null
+    systemctl restart badvpn-udpgw 2>/dev/null
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null
+    systemctl restart squid 2>/dev/null
+    systemctl restart vps-api 2>/dev/null
+    systemctl restart vps-bot 2>/dev/null
+
+    echo ""
+    echo -e "${G}======================================${NC}"
+    echo -e "${G}       RESTORE DATA BERHASIL!         ${NC}"
+    echo -e "${G}======================================${NC}"
+    echo -e " Akun SSH Dipulihkan : ${Y}$count_ssh Akun${NC}"
+    echo -e " Status Service Xray : ${G}$(systemctl is-active xray 2>/dev/null || echo 'OK')${NC}"
+    echo -e " Domain VPS          : ${Y}$(cat /etc/vps-domain.txt 2>/dev/null || echo '-')${NC}"
+    echo -e "${G}======================================${NC}"
+    echo ""
+    read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
 }
 
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
+do_restore_local() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}     RESTORE DARI FILE LOKAL VPS      ${NC}"
+    echo -e "${C}======================================${NC}"
+    
+    local files=($(ls -1t "$BACKUP_DIR"/backup-*.tar.gz 2>/dev/null))
+    if [ ${#files[@]} -eq 0 ]; then
+        echo -e "${R}Tidak ada file backup ditemukan di $BACKUP_DIR${NC}"
+        echo ""
+        read -r -p "Tekan [Enter] untuk kembali..." dummy
+        return
+    fi
 
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
+    echo -e "Pilih file backup yang ingin dipulihkan:"
+    local i=1
+    for f in "${files[@]}"; do
+        local fname
+        fname=$(basename "$f")
+        local fsz
+        fsz=$(du -h "$f" 2>/dev/null | awk '{print $1}')
+        local fdate
+        fdate=$(date -r "$f" '+%d-%m-%Y %H:%M' 2>/dev/null)
+        echo -e " [$i] $fname (${G}$fsz${NC} - $fdate)"
+        i=$((i + 1))
     done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
+    echo -e " [0] Batal"
+    echo -e "${C}======================================${NC}"
+    read -p " Pilih Nomor File [0-$((i - 1))]: " sel
+    if [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" -ge 1 ] && [ "$sel" -lt "$i" ]; then
+        local chosen="${files[$((sel - 1))]}"
+        echo -e "\n${Y}Memulihkan dari file: $(basename "$chosen")...${NC}"
+        do_restore_core "$chosen"
+    else
+        echo -e "${Y}Dibatalkan.${NC}"
+        sleep 1
+    fi
+}
 
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
+do_restore_url() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}      RESTORE DARI LINK / URL ONLINE  ${NC}"
+    echo -e "${C}======================================${NC}"
+    echo -e "Masukkan link unduh file backup (.tar.gz):"
+    echo -e "(Contoh: https://file.io/xyz atau direct raw link)"
+    echo -e "--------------------------------------"
+    read -p " Link URL: " r_url
+    if [ -z "$r_url" ]; then
+        echo -e "${R}Link tidak boleh kosong!${NC}"
+        sleep 1.5
+        return
+    fi
 
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+    echo -e "${Y}Mengunduh arsip backup dari URL...${NC}"
+    local dest="$BACKUP_DIR/downloaded_restore_$$.tar.gz"
+    curl -sL "$r_url" -o "$dest" 2>/dev/null || wget -qO "$dest" "$r_url" 2>/dev/null
+
+    if [ ! -s "$dest" ]; then
+        echo -e "${R}Gagal mengunduh file dari link tersebut atau file kosong!${NC}"
+        rm -f "$dest" 2>/dev/null
+        sleep 2
+        return
+    fi
+
+    do_restore_core "$dest"
+    rm -f "$dest" 2>/dev/null
+}
+
+do_send_telegram() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}     KIRIM FILE BACKUP KE TELEGRAM    ${NC}"
+    echo -e "${C}======================================${NC}"
+
+    local bot_token=""
+    if [ -f /usr/local/bin/vps-bot ]; then
+        bot_token=$(grep "^BOT_TOKEN =" /usr/local/bin/vps-bot | cut -d '"' -f 2)
+    fi
+    if [ -z "$bot_token" ] || [ "$bot_token" == "ISI_TOKEN_BOT_DISINI" ]; then
+        read -p " Masukkan Bot Token Telegram: " bot_token
+    fi
+
+    if [ -z "$bot_token" ] || [ "$bot_token" == "ISI_TOKEN_BOT_DISINI" ]; then
+        echo -e "${R}Bot token tidak valid!${NC}"
+        sleep 1.5
+        return
+    fi
+
+    local chat_id=""
+    [ -f /etc/premdigital/telegram_chat_id.txt ] && chat_id=$(cat /etc/premdigital/telegram_chat_id.txt | tr -d '\r\n')
+    if [ -z "$chat_id" ]; then
+        read -p " Masukkan Telegram Chat ID Anda: " chat_id
+        if [ -n "$chat_id" ]; then
+            mkdir -p /etc/premdigital
+            echo "$chat_id" > /etc/premdigital/telegram_chat_id.txt
+        fi
+    else
+        echo -e " Chat ID tersimpan: ${G}$chat_id${NC}"
+        read -p " Gunakan Chat ID ini? [Y/n]: " use_cid
+        if [[ "$use_cid" =~ ^[nN]$ ]]; then
+            read -p " Masukkan Chat ID Baru: " chat_id
+            echo "$chat_id" > /etc/premdigital/telegram_chat_id.txt
+        fi
+    fi
+
+    if [ -z "$chat_id" ]; then
+        echo -e "${R}Chat ID tidak boleh kosong!${NC}"
+        sleep 1.5
+        return
+    fi
+
+    local latest_file
+    latest_file=$(ls -1t "$BACKUP_DIR"/backup-*.tar.gz 2>/dev/null | head -n 1)
+    if [ -z "$latest_file" ] || [ ! -f "$latest_file" ]; then
+        echo -e "${Y}Belum ada file backup, membuat backup baru sekarang...${NC}"
+        local IP
+        IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
+        local IP_CLEAN
+        IP_CLEAN=$(echo "$IP" | tr '.' '-')
+        local NOW
+        NOW=$(date +'%Y-%m-%d-%H%M%S')
+        local TEMP="/root/backup/tmp_bck_$$"
+        mkdir -p "$TEMP"
+        [ -d /etc/xray ] && cp -rf /etc/xray "$TEMP/" 2>/dev/null
+        [ -f /etc/vps-domain.txt ] && cp -f /etc/vps-domain.txt "$TEMP/"
+        [ -f /etc/issue.net ] && cp -f /etc/issue.net "$TEMP/"
+        [ -d /etc/stunnel ] && cp -rf /etc/stunnel "$TEMP/" 2>/dev/null
+        [ -d /etc/premdigital ] && cp -rf /etc/premdigital "$TEMP/" 2>/dev/null
+        awk -F: '($3>=1000)&&($1!="nobody"){print $1}' /etc/passwd > "$TEMP/vpn_users.list"
+        awk -F: '($3>=1000)&&($1!="nobody"){print $0}' /etc/passwd > "$TEMP/passwd.bak"
+        while IFS= read -r u; do
+            [ -n "$u" ] && grep "^$u:" /etc/shadow >> "$TEMP/shadow.bak" 2>/dev/null
+            [ -n "$u" ] && grep "^$u:" /etc/group >> "$TEMP/group.bak" 2>/dev/null
+        done < "$TEMP/vpn_users.list"
+        latest_file="$BACKUP_DIR/backup-${IP_CLEAN}-${NOW}.tar.gz"
+        tar -czf "$latest_file" -C "$TEMP" .
+        rm -rf "$TEMP"
+    fi
+
+    echo -e "${Y}Mengirim $(basename "$latest_file") ke Telegram...${NC}"
+    local caption="Backup VPS $(cat /etc/vps-domain.txt 2>/dev/null || echo 'PremDigital') - $(date '+%d-%m-%Y %H:%M:%S')"
+    local res
+    res=$(curl -s -F chat_id="$chat_id" -F document=@"$latest_file" -F caption="$caption" "https://api.telegram.org/bot${bot_token}/sendDocument")
+
+    if echo "$res" | grep -q '"ok":true'; then
+        echo -e "${G}SUKSES! File backup berhasil terkirim langsung ke Telegram Anda!${NC}"
+    else
+        echo -e "${R}Gagal mengirim file ke Telegram!${NC}"
+        echo -e "Detail response: $res"
+    fi
+    echo ""
+    read -r -p "Tekan [Enter] untuk kembali..." dummy
+}
+
+do_manage_backups() {
+    clear
+    echo -e "${C}======================================${NC}"
+    echo -e "${Y}     DAFTAR FILE BACKUP DI VPS        ${NC}"
+    echo -e "${C}======================================${NC}"
+    local files=($(ls -1t "$BACKUP_DIR"/backup-*.tar.gz 2>/dev/null))
+    if [ ${#files[@]} -eq 0 ]; then
+        echo -e "Tidak ada file backup tersimpan di $BACKUP_DIR"
+        echo ""
+        read -r -p "Tekan [Enter] untuk kembali..." dummy
+        return
+    fi
+
+    local i=1
+    for f in "${files[@]}"; do
+        local fname
+        fname=$(basename "$f")
+        local fsz
+        fsz=$(du -h "$f" 2>/dev/null | awk '{print $1}')
+        local fdate
+        fdate=$(date -r "$f" '+%d-%m-%Y %H:%M:%S' 2>/dev/null)
+        echo -e " [$i] $fname (${G}$fsz${NC} | $fdate)"
+        i=$((i + 1))
+    done
+    echo -e "--------------------------------------"
+    echo -e " [D] Hapus Satu File Tertentu"
+    echo -e " [C] Bersihkan / Hapus SEMUA Backup Lama"
+    echo -e " [0] Kembali"
+    echo -e "${C}======================================${NC}"
+    read -p " Pilihan: " m_opt
+    case "$m_opt" in
+        [dD])
+            read -p " Masukkan nomor file yang ingin dihapus [1-$((i - 1))]: " del_num
+            if [[ "$del_num" =~ ^[0-9]+$ ]] && [ "$del_num" -ge 1 ] && [ "$del_num" -lt "$i" ]; then
+                rm -f "${files[$((del_num - 1))]}"
+                echo -e "${G}File backup berhasil dihapus!${NC}"
+                sleep 1.5
+            fi
+            ;;
         [cC])
             read -p " Yakin ingin menghapus SEMUA file backup lokal? [y/N]: " cf
             if [[ "$cf" =~ ^[yY]$ ]]; then
@@ -2451,137 +2243,11 @@ do_auto_backup_cron() {
     echo -e "${C}======================================${NC}"
     read -p " Pilih Opsi [0-2]: " a_opt
     case $a_opt in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+        1)
+            (crontab -l 2>/dev/null | grep -v "menu-backup --cron"; echo "0 0 * * * /usr/bin/menu-backup --cron >/dev/null 2>&1") | crontab -
+            echo -e "${G}Auto-Backup harian berhasil diaktifkan!${NC}"
+            sleep 1.5
+            ;;
         2)
             (crontab -l 2>/dev/null | grep -v "menu-backup --cron") | crontab -
             echo -e "${G}Auto-Backup harian berhasil dinonaktifkan!${NC}"
@@ -2595,12 +2261,12 @@ SVC_EOF
 # Standalone execution checks
 if [[ "$(basename "$0")" == "backup-vps" ]] || [[ "$1" == "--backup" ]]; then
     do_backup
-    exit 0
+    exec /usr/bin/menu
 fi
 
 if [[ "$(basename "$0")" == "restore-vps" ]] || [[ "$1" == "--restore" ]]; then
     do_restore_local
-    exit 0
+    exec /usr/bin/menu
 fi
 
 if [[ "$1" == "--cron" ]]; then
@@ -2633,7 +2299,7 @@ if [[ "$1" == "--cron" ]]; then
     fi
 
     find "$BACKUP_DIR" -name "backup-*.tar.gz" -mtime +7 -delete 2>/dev/null
-    exit 0
+    exec /usr/bin/menu
 fi
 
 while true; do
@@ -2651,137 +2317,8 @@ while true; do
     echo -e "${C}======================================${NC}"
     read -p " Pilih Opsi [0-6]: " opt_bck
     case $opt_bck in
-                    1)
-                        clear
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "\e[33m         HUBUNGKAN VPS KE WEB AUTO-CREATOR         \e[0m"
-                        echo -e "\e[36m====================================================\e[0m"
-                        echo -e "Menu ini akan memasang Daemon agar VPS ini dapat"
-                        echo -e "menerima perintah pembuatan akun otomatis dari Web."
-                        echo -e ""
-                        read -p "Masukkan Server ID / Node ID (Contoh: sg-premium-01): " new_nodeid
-                        if [ -z "$new_nodeid" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        read -p "Masukkan API Key Firebase/Web: " new_apikey
-                        if [ -z "$new_apikey" ]; then
-                            echo "Dibatalkan."
-                            sleep 2
-                            continue
-                        fi
-                        echo -e "\n\e[33m[INFO] Menyiapkan Auto-Creator Daemon...\e[0m"
-                        mkdir -p /etc/premdigital
-                        echo "$new_apikey" > /etc/premdigital/web_apikey.txt
-                        echo "$new_nodeid" > /etc/premdigital/web_nodeid.txt
-                        cat > /root/auto_creator.sh << 'SCRIPT_EOF'
-#!/bin/bash
-NODE_ID="NODE_ID_REPLACE"
-PROJECT_ID="web-premdigitalvpn"
-API_KEY="API_KEY_REPLACE"
-REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
-
-fetch_commands() {
-  QUERY_PAYLOAD=$(cat <<EOT
-  {
-    "structuredQuery": {
-      "from": [{"collectionId": "vps_commands"}],
-      "where": {
-        "compositeFilter": {
-          "op": "AND",
-          "filters": [
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "serverId"},
-                "op": "EQUAL",
-                "value": {"stringValue": "${NODE_ID}"}
-              }
-            },
-            {
-              "fieldFilter": {
-                "field": {"fieldPath": "status"},
-                "op": "EQUAL",
-                "value": {"stringValue": "pending"}
-              }
-            }
-          ]
-        }
-      }
-    }
-  }
-EOT
-  )
-  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "$QUERY_PAYLOAD"
-}
-
-update_command_status() {
-  DOC_PATH=$1
-  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
-  PAYLOAD=$(cat <<EOT
-  {
-    "fields": {
-      "status": { "stringValue": "success" }
-    }
-  }
-EOT
-  )
-  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
-}
-
-while true; do
-  RESPONSE=$(fetch_commands)
-  if echo "$RESPONSE" | grep -q '"document":"'; then
-    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
-      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
-      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
-      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
-      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
-      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
-      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
-      
-      if [ "$PROTOCOL" == "ssh" ]; then
-        if id "$USERNAME" &>/dev/null; then
-            userdel -f "$USERNAME" &>/dev/null
-        fi
-        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
-        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
-        echo "$USERNAME:$PASSWORD" | chpasswd
-        update_command_status "$DOC_PATH"
-      fi
-    done
-  fi
-  sleep 5
-done
-SCRIPT_EOF
-                        sed -i "s/NODE_ID_REPLACE/$new_nodeid/g" /root/auto_creator.sh
-                        sed -i "s/API_KEY_REPLACE/$new_apikey/g" /root/auto_creator.sh
-                        chmod +x /root/auto_creator.sh
-                        cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
-[Unit]
-Description=VPS Auto-Creator Daemon
-After=network.target
-
-[Service]
-Type=simple
-User=root
-ExecStart=/root/auto_creator.sh
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SVC_EOF
-                        systemctl daemon-reload
-                        systemctl enable vps-autocreator
-                        systemctl restart vps-autocreator
-                        echo -e "\e[32m[SUKSES] VPS berhasil dihubungkan! Auto-Creator sudah berjalan.\e[0m"
-                        echo -e "Silakan cek di web Anda apakah fitur auto create berjalan.\n"
-                        read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke menu..."
-                        continue
-                        ;;
+        1) do_backup ;;
+        2) do_restore_local ;;
         3) do_restore_url ;;
         4) do_send_telegram ;;
         5) do_manage_backups ;;
@@ -2963,3 +2500,120 @@ echo -e "\e[36m----------------------------------------------------\e[0m"
 echo -e " 👉 Ketik \e[33mmenu\e[0m di terminal VPS Anda untuk membuka Panel CLI."
 echo -e " 👉 Perintah Cepat: \e[33mbackup\e[0m (Backup Data) | \e[33mrestore\e[0m (Pulihkan Data)"
 echo -e "\e[36m====================================================\e[0m"
+
+# ==========================================
+# AUTO CREATOR DAEMON SETUP
+# ==========================================
+if [ -f /etc/premdigital/web_apikey.txt ] && [ -f /etc/premdigital/web_nodeid.txt ]; then
+    echo -e "\e[33m[INFO] Menyiapkan Auto-Creator Daemon untuk Web...\e[0m"
+    WEB_APIKEY=$(cat /etc/premdigital/web_apikey.txt)
+    WEB_NODEID=$(cat /etc/premdigital/web_nodeid.txt)
+    
+    cat > /root/auto_creator.sh << 'SCRIPT_EOF'
+#!/bin/bash
+NODE_ID="NODE_ID_REPLACE"
+PROJECT_ID="web-premdigitalvpn"
+API_KEY="API_KEY_REPLACE"
+REST_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents"
+
+fetch_commands() {
+  QUERY_PAYLOAD=$(cat <<EOT
+  {
+    "structuredQuery": {
+      "from": [{"collectionId": "vps_commands"}],
+      "where": {
+        "compositeFilter": {
+          "op": "AND",
+          "filters": [
+            {
+              "fieldFilter": {
+                "field": {"fieldPath": "serverId"},
+                "op": "EQUAL",
+                "value": {"stringValue": "${NODE_ID}"}
+              }
+            },
+            {
+              "fieldFilter": {
+                "field": {"fieldPath": "status"},
+                "op": "EQUAL",
+                "value": {"stringValue": "pending"}
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+EOT
+  )
+  curl -s -X POST "${REST_URL}:runQuery?key=${API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$QUERY_PAYLOAD"
+}
+
+update_command_status() {
+  DOC_PATH=$1
+  UPDATE_URL="${REST_URL}/${DOC_PATH}?key=${API_KEY}&updateMask.fieldPaths=status"
+  PAYLOAD=$(cat <<EOT
+  {
+    "fields": {
+      "status": { "stringValue": "success" }
+    }
+  }
+EOT
+  )
+  curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
+}
+
+while true; do
+  RESPONSE=$(fetch_commands)
+  if echo "$RESPONSE" | grep -q '"document"'; then
+    echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
+      [ -z "$DOC_DATA" ] || [ "$DOC_DATA" == "null" ] && continue
+      DOC_PATH=$(echo "$DOC_DATA" | jq -r '.name' | awk -F'(default)/documents/' '{print $2}')
+      USERNAME=$(echo "$DOC_DATA" | jq -r '.fields.username.stringValue')
+      PASSWORD=$(echo "$DOC_DATA" | jq -r '.fields.password.stringValue')
+      PROTOCOL=$(echo "$DOC_DATA" | jq -r '.fields.protocol.stringValue')
+      ACTIVEDAYS=$(echo "$DOC_DATA" | jq -r '.fields.activeDays.integerValue')
+      
+      if [ "$PROTOCOL" == "ssh" ]; then
+        if id "$USERNAME" &>/dev/null; then
+            userdel -f "$USERNAME" &>/dev/null
+        fi
+        EXP_DATE=$(date -d "+${ACTIVEDAYS} days" +"%Y-%m-%d")
+        useradd -e "$EXP_DATE" -s /bin/false -M "$USERNAME"
+        echo "$USERNAME:$PASSWORD" | chpasswd
+        update_command_status "$DOC_PATH"
+      fi
+    done
+  fi
+  sleep 5
+done
+SCRIPT_EOF
+
+    sed -i "s/NODE_ID_REPLACE/$WEB_NODEID/g" /root/auto_creator.sh
+    sed -i "s/API_KEY_REPLACE/$WEB_APIKEY/g" /root/auto_creator.sh
+    chmod +x /root/auto_creator.sh
+
+    cat > /etc/systemd/system/vps-autocreator.service << 'SVC_EOF'
+[Unit]
+Description=VPS Auto-Creator Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/root/auto_creator.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SVC_EOF
+
+    systemctl daemon-reload
+    systemctl enable vps-autocreator
+    systemctl restart vps-autocreator
+    echo -e "\e[32m[SUKSES] Auto-Creator Daemon berjalan!\e[0m"
+fi
+# FIX: restore original file structure and cleanly inject auto-creator
