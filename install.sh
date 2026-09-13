@@ -238,7 +238,7 @@ sleep 1
 echo -e "\e[33m[INFO] Update & Install Packages (Non-interactive)...\e[0m"
 apt-get update -y
 apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
-apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools psmisc lsof vnstat bc
+apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl wget wget2 nano jq python3 python3-pip cron ufw dropbear stunnel4 squid python3-flask python3-requests net-tools psmisc lsof vnstat bc
 
 # Pasang Official Ookla Speedtest CLI
 echo -e "\e[33m[INFO] Memasang Official Ookla Speedtest CLI...\e[0m"
