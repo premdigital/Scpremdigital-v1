@@ -211,7 +211,7 @@ EOF
 
     rm -f /tmp/temp-install.sh
     echo -e "\e[32mMenu, Modul Xray, Banner, Stunnel SSL, Ookla Speedtest & Uptime berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
-    exec /usr/bin/menu
+    exit 0
 fi
 
 # ==========================================
@@ -1585,7 +1585,7 @@ END_MOTD
             ;;
         0)
             clear
-            exec /usr/bin/menu
+            exit 0
             ;;
         *)
             echo -e "Pilihan salah!"
@@ -2261,12 +2261,12 @@ do_auto_backup_cron() {
 # Standalone execution checks
 if [[ "$(basename "$0")" == "backup-vps" ]] || [[ "$1" == "--backup" ]]; then
     do_backup
-    exec /usr/bin/menu
+    exit 0
 fi
 
 if [[ "$(basename "$0")" == "restore-vps" ]] || [[ "$1" == "--restore" ]]; then
     do_restore_local
-    exec /usr/bin/menu
+    exit 0
 fi
 
 if [[ "$1" == "--cron" ]]; then
@@ -2299,7 +2299,7 @@ if [[ "$1" == "--cron" ]]; then
     fi
 
     find "$BACKUP_DIR" -name "backup-*.tar.gz" -mtime +7 -delete 2>/dev/null
-    exec /usr/bin/menu
+    exit 0
 fi
 
 while true; do
@@ -2617,4 +2617,4 @@ SVC_EOF
     echo -e "\e[32m[SUKSES] Auto-Creator Daemon berjalan!\e[0m"
 fi
 # FIX: restore original file structure and cleanly inject auto-creator
-# Ready for Github Commit - Bug fixed
+# Ready for Github Commit - Bug fixed (exit 0)
