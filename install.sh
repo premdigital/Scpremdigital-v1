@@ -1,26 +1,5 @@
 #!/bin/bash
 
-# ==========================================
-# CEK LISENSI IP (GITHUB)
-# ==========================================
-MYIP=$(curl -sS ipv4.icanhazip.com || curl -sS ifconfig.me)
-IZIN_DATA=$(curl -sS https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
-if [ -z "$IZIN_DATA" ]; then
-    echo -e "\e[31mAkses Ditolak! IP VPS ($MYIP) tidak terdaftar.\e[0m"
-    echo -e "\e[33mSilakan hubungi admin untuk mendaftarkan IP Anda.\e[0m"
-    exit 1
-fi
-EXP_DATE=$(echo "$IZIN_DATA" | awk '{print $3}')
-d1=$(date -d "$EXP_DATE" +%s 2>/dev/null)
-d2=$(date -d "today" +%s 2>/dev/null)
-if [ -n "$d1" ] && [ -n "$d2" ]; then
-    SISA_HARI=$(( (d1 - d2) / 86400 ))
-    if [ "$SISA_HARI" -lt 0 ]; then
-        echo -e "\e[31mScript Expired! Lisensi Anda sudah habis masa aktifnya.\e[0m"
-        exit 1
-    fi
-fi
-
 if [[ "$1" == "--update-menu" ]]; then
     echo -e "\e[32mMendownload dan memperbarui menu & modul Xray...\e[0m"
     wget -qO /tmp/temp-install.sh https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/install.sh
@@ -63,6 +42,28 @@ if [[ "$1" == "--update-menu" ]]; then
             if [ -n "$existing_token" ] && [ "$existing_token" != "ISI_TOKEN_BOT_DISINI" ]; then
                 sed -i "s/BOT_TOKEN = \".*\"/BOT_TOKEN = \"$existing_token\"/g" /usr/local/bin/vps-bot
             fi
+
+# ==========================================
+# CEK LISENSI IP (GITHUB)
+# ==========================================
+MYIP=$(curl -sS -m 3 ipv4.icanhazip.com || curl -sS -m 3 ifconfig.me)
+IZIN_DATA=$(curl -sS -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+if [ -z "$IZIN_DATA" ]; then
+    echo -e "\e[31mAkses Ditolak! IP VPS ($MYIP) tidak terdaftar.\e[0m"
+    echo -e "\e[33mSilakan hubungi admin untuk mendaftarkan IP Anda.\e[0m"
+    exit 1
+fi
+EXP_DATE=$(echo "$IZIN_DATA" | awk '{print $3}')
+d1=$(date -d "$EXP_DATE" +%s 2>/dev/null)
+d2=$(date -d "today" +%s 2>/dev/null)
+if [ -n "$d1" ] && [ -n "$d2" ]; then
+    SISA_HARI=$(( (d1 - d2) / 86400 ))
+    if [ "$SISA_HARI" -lt 0 ]; then
+        echo -e "\e[31mScript Expired! Lisensi Anda sudah habis masa aktifnya.\e[0m"
+        exit 1
+    fi
+fi
+
             systemctl restart vps-bot 2>/dev/null || true
         fi
         rm -f /tmp/vps-bot.py
@@ -322,7 +323,7 @@ mkdir -p /etc/premdigital/
 mkdir -p /usr/local/bin/
 touch /etc/premdigital/users.db
 
-MYIP=$(curl -sS ipv4.icanhazip.com 2>/dev/null || curl -sS ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+MYIP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
 if [ ! -f /etc/vps-domain.txt ]; then
     echo "$MYIP" > /etc/vps-domain.txt
 fi
@@ -866,8 +867,8 @@ NC="\e[0m"
 # ==========================================
 # CEK LISENSI IP (GITHUB)
 # ==========================================
-MYIP=$(curl -sS ipv4.icanhazip.com || curl -sS ifconfig.me)
-IZIN_DATA=$(curl -sS https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+MYIP=$(curl -sS -m 3 ipv4.icanhazip.com || curl -sS -m 3 ifconfig.me)
+IZIN_DATA=$(curl -sS -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
 if [ -z "$IZIN_DATA" ]; then
     echo -e "${R}Akses Ditolak! IP VPS ($MYIP) tidak terdaftar.${NC}"
     exit 1
