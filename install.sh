@@ -46,8 +46,8 @@ if [[ "$1" == "--update-menu" ]]; then
 # ==========================================
 # CEK LISENSI IP (GITHUB)
 # ==========================================
-MYIP=$(curl -sS -m 3 ipv4.icanhazip.com || curl -sS -m 3 ifconfig.me)
-IZIN_DATA=$(curl -sS -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+MYIP=$(curl -s -m 3 ipv4.icanhazip.com || curl -s -m 3 ifconfig.me)
+IZIN_DATA=$(curl -s -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
 if [ -z "$IZIN_DATA" ]; then
     echo -e "\e[31mAkses Ditolak! IP VPS ($MYIP) tidak terdaftar.\e[0m"
     echo -e "\e[33mSilakan hubungi admin untuk mendaftarkan IP Anda.\e[0m"
@@ -323,7 +323,7 @@ mkdir -p /etc/premdigital/
 mkdir -p /usr/local/bin/
 touch /etc/premdigital/users.db
 
-MYIP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+MYIP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
 if [ ! -f /etc/vps-domain.txt ]; then
     echo "$MYIP" > /etc/vps-domain.txt
 fi
@@ -867,8 +867,8 @@ NC="\e[0m"
 # ==========================================
 # CEK LISENSI IP (GITHUB)
 # ==========================================
-MYIP=$(curl -sS -m 3 ipv4.icanhazip.com || curl -sS -m 3 ifconfig.me)
-IZIN_DATA=$(curl -sS -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+MYIP=$(curl -s -m 3 ipv4.icanhazip.com || curl -s -m 3 ifconfig.me)
+IZIN_DATA=$(curl -s -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
 if [ -z "$IZIN_DATA" ]; then
     echo -e "${R}Akses Ditolak! IP VPS ($MYIP) tidak terdaftar.${NC}"
     exit 1
@@ -1051,7 +1051,7 @@ get_uptime_info() {
 }
 
 while true; do
-    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     
     # Deteksi ISP Akurat (ipinfo.io -> ip-api -> ifconfig.co)
     ISP=$(curl -s -m 3 "https://ipinfo.io/${IP}/org" 2>/dev/null | sed -e 's/^AS[0-9]* //' | tr -d '"')
@@ -1831,7 +1831,7 @@ do_backup() {
     echo -e "${Y}Mengumpulkan data konfigurasi, akun & database...${NC}"
     
     local IP
-    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     local IP_CLEAN
     IP_CLEAN=$(echo "$IP" | tr '.' '-')
     local NOW
@@ -2136,7 +2136,7 @@ do_send_telegram() {
     if [ -z "$latest_file" ] || [ ! -f "$latest_file" ]; then
         echo -e "${Y}Belum ada file backup, membuat backup baru sekarang...${NC}"
         local IP
-        IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
+        IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
         local IP_CLEAN
         IP_CLEAN=$(echo "$IP" | tr '.' '-')
         local NOW
@@ -2271,7 +2271,7 @@ if [[ "$(basename "$0")" == "restore-vps" ]] || [[ "$1" == "--restore" ]]; then
 fi
 
 if [[ "$1" == "--cron" ]]; then
-    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
+    IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
     IP_CLEAN=$(echo "$IP" | tr '.' '-')
     NOW=$(date +'%Y-%m-%d-%H%M%S')
     TEMP="/root/backup/tmp_bck_cron_$$"
