@@ -508,22 +508,15 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
                 target_sock.sendall(data)
                 first_client_packet = False
             else:
-                target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                set_optimized_sock(target_sock)
-                target_sock.connect((target_host, target_port))
-                
-                # Ambil banner awal Dropbear langsung dari port SSH
-                target_sock.settimeout(6.0)
-                ssh_banner = target_sock.recv(1024)
-                if not ssh_banner:
-                    return
-                
-                # Kirim respons handshake disusul banner SSH Dropbear ke HTTP Custom
+                # Kirim respons handshake terlebih dahulu agar HTTP Custom membaca 101 bersih
                 if data.startswith(b'CONNECT') or b'CONNECT ' in data:
                     client_sock.sendall(RESPONSE_200)
                 else:
                     client_sock.sendall(RESPONSE_101)
-                client_sock.sendall(ssh_banner)
+                
+                target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                set_optimized_sock(target_sock)
+                target_sock.connect((target_host, target_port))
                 first_client_packet = True
         # 3. Direct SSH Protocol biasa (SSH-2.0...)
         else:
