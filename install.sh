@@ -455,7 +455,7 @@ cat > /usr/local/bin/ws-proxy << 'END'
 import socket, threading, select, sys, time
 
 BUFFER_SIZE = 65536
-RESPONSE_101 = b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n"
+RESPONSE_101 = b"HTTP/1.1 200 OK\r\n\r\n"
 
 def set_optimized_sock(s):
     try:
