@@ -66,23 +66,23 @@ if [[ "$1" == "--update-menu" ]]; then
 
     # Update Banner PremDigital Blue Planet di /etc/issue.net
     cat > /etc/issue.net << 'BANNEREOF'
-<br>
-<center>
-<font color="#0080ff">━━━━━━</font><font color="#00e5ff">ஐஇ⚙️இஐ</font><font color="#0080ff">━━━━━━</font><br>
-<font color="#ffd700"><b>--- ★ PREMDIGITAL ★ ---</b></font><br>
-<font color="#ff3333"><b>! TERM OF SERVICE !</b></font><br>
-<font color="#00ffff"><b>NO SPAM</b></font><br>
-<font color="#00ffff"><b>NO DDOS</b></font><br>
-<font color="#00ffff"><b>NO HACKING AND CARDING</b></font><br>
-<font color="#ff4444"><b>NO TORRENT!!</b></font><br>
-<font color="#ff4444"><b>NO MULTI LOGIN!!</b></font><br>
-<font color="#b388ff"><b>Order Premium :</b></font><br>
-<font color="#64b5f6">Tele: https://t.me/PremdigitalTunnel_bot</font><br>
-<font color="#58d68d">WA: https://wa.me/6283188458876</font><br>
-<font color="#00ffff"><b>Web: https://www.premdigital.web.id</b></font><br>
-<font color="#0080ff">━━━━━━</font><font color="#00e5ff">ஐஇ⚙️இஐ</font><font color="#0080ff">━━━━━━</font>
-</center>
-<br>
+
+
+━━━━━━***━━━━━━
+--- ★ PREMDIGITAL ★ ---
+! TERM OF SERVICE !
+NO SPAM
+NO DDOS
+NO HACKING AND CARDING
+NO TORRENT!!
+NO MULTI LOGIN!!
+Order Premium :
+Tele: https://t.me/PremdigitalTunnel_bot
+WA: https://wa.me/6283188458876
+Web: https://www.premdigital.web.id
+━━━━━━***━━━━━━
+
+
 BANNEREOF
     cp -f /etc/issue.net /etc/issue 2>/dev/null || true
     systemctl restart dropbear 2>/dev/null || true
@@ -394,23 +394,23 @@ mkdir -p /etc/dropbear
 [ -f /etc/dropbear/dropbear_ed25519_host_key ] || dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key 2>/dev/null || true
 
 cat > /etc/issue.net << 'END'
-<br>
-<center>
-<font color="#0080ff">━━━━━━</font><font color="#00e5ff">ஐஇ⚙️இஐ</font><font color="#0080ff">━━━━━━</font><br>
-<font color="#ffd700"><b>--- ★ PREMDIGITAL ★ ---</b></font><br>
-<font color="#ff3333"><b>! TERM OF SERVICE !</b></font><br>
-<font color="#00ffff"><b>NO SPAM</b></font><br>
-<font color="#00ffff"><b>NO DDOS</b></font><br>
-<font color="#00ffff"><b>NO HACKING AND CARDING</b></font><br>
-<font color="#ff4444"><b>NO TORRENT!!</b></font><br>
-<font color="#ff4444"><b>NO MULTI LOGIN!!</b></font><br>
-<font color="#b388ff"><b>Order Premium :</b></font><br>
-<font color="#64b5f6">Tele: https://t.me/PremdigitalTunnel_bot</font><br>
-<font color="#58d68d">WA: https://wa.me/6283188458876</font><br>
-<font color="#00ffff"><b>Web: https://www.premdigital.web.id</b></font><br>
-<font color="#0080ff">━━━━━━</font><font color="#00e5ff">ஐஇ⚙️இஐ</font><font color="#0080ff">━━━━━━</font>
-</center>
-<br>
+
+
+━━━━━━***━━━━━━
+--- ★ PREMDIGITAL ★ ---
+! TERM OF SERVICE !
+NO SPAM
+NO DDOS
+NO HACKING AND CARDING
+NO TORRENT!!
+NO MULTI LOGIN!!
+Order Premium :
+Tele: https://t.me/PremdigitalTunnel_bot
+WA: https://wa.me/6283188458876
+Web: https://www.premdigital.web.id
+━━━━━━***━━━━━━
+
+
 END
 cp -f /etc/issue.net /etc/issue 2>/dev/null || true
 cat > /etc/motd << 'END_MOTD'
@@ -1497,23 +1497,23 @@ while true; do
                     ;;
                 2)
                     cat > /etc/issue.net << 'BANNEREOF'
-<br>
-<center>
-<font color="#0080ff">━━━━━━</font><font color="#00e5ff">ஐஇ⚙️இஐ</font><font color="#0080ff">━━━━━━</font><br>
-<font color="#ffd700"><b>--- ★ PREMDIGITAL ★ ---</b></font><br>
-<font color="#ff3333"><b>! TERM OF SERVICE !</b></font><br>
-<font color="#00ffff"><b>NO SPAM</b></font><br>
-<font color="#00ffff"><b>NO DDOS</b></font><br>
-<font color="#00ffff"><b>NO HACKING AND CARDING</b></font><br>
-<font color="#ff4444"><b>NO TORRENT!!</b></font><br>
-<font color="#ff4444"><b>NO MULTI LOGIN!!</b></font><br>
-<font color="#b388ff"><b>Order Premium :</b></font><br>
-<font color="#64b5f6">Tele: https://t.me/PremdigitalTunnel_bot</font><br>
-<font color="#58d68d">WA: https://wa.me/6283188458876</font><br>
-<font color="#00ffff"><b>Web: https://www.premdigital.web.id</b></font><br>
-<font color="#0080ff">━━━━━━</font><font color="#00e5ff">ஐஇ⚙️இஐ</font><font color="#0080ff">━━━━━━</font>
-</center>
-<br>
+
+
+━━━━━━***━━━━━━
+--- ★ PREMDIGITAL ★ ---
+! TERM OF SERVICE !
+NO SPAM
+NO DDOS
+NO HACKING AND CARDING
+NO TORRENT!!
+NO MULTI LOGIN!!
+Order Premium :
+Tele: https://t.me/PremdigitalTunnel_bot
+WA: https://wa.me/6283188458876
+Web: https://www.premdigital.web.id
+━━━━━━***━━━━━━
+
+
 BANNEREOF
                     cp -f /etc/issue.net /etc/issue 2>/dev/null || true
                     cat > /etc/motd << 'END_MOTD'
