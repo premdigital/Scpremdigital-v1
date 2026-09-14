@@ -2,6 +2,7 @@
 
 if [[ "$1" == "--update-menu" ]]; then
     echo -e "\e[32mMendownload dan memperbarui menu & modul Xray...\e[0m"
+    rm -f /tmp/.cached_* /tmp/cached_* 2>/dev/null
     wget -qO /tmp/temp-install.sh https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/install.sh
     awk '/^cat > \/usr\/bin\/menu << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu
     awk '/^cat > \/usr\/bin\/menu-service << '"'END'"'/{flag=1; next} /^END$/{if(flag){flag=0; next}} flag' /tmp/temp-install.sh > /usr/bin/menu-service
@@ -322,7 +323,7 @@ mkdir -p /etc/premdigital/
 mkdir -p /usr/local/bin/
 touch /etc/premdigital/users.db
 
-MY
+MYIP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
 if [ ! -f /etc/vps-domain.txt ]; then
     echo "$MYIP" > /etc/vps-domain.txt
 fi
@@ -1049,19 +1050,40 @@ get_uptime_info() {
     echo -e "${elapsed_str}"
 }
 
-    # Cache IP, ISP, City
-    if [ ! -f /tmp/.cached_ip ]; then
-        IP_TMP=$(curl -s -m 2 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
-        ISP_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/org" 2>/dev/null | sed -e "s/^AS[0-9]* //" | tr -d "\"" || echo "PremDigital Cloud")
-        CITY_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/city" 2>/dev/null | tr -d "\"" || echo "Singapore")
-        echo "$IP_TMP" > /tmp/.cached_ip
-        echo "$ISP_TMP" > /tmp/.cached_isp
-        echo "$CITY_TMP" > /tmp/.cached_city
+# Deteksi IP Publik (dengan fallback multi-sumber)
+IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || curl -s -m 3 ifconfig.me 2>/dev/null || curl -s -m 3 api.ipify.org 2>/dev/null || echo "")
+if [[ -z "$IP" || "$IP" =~ ^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.) ]]; then
+    if [ -f /etc/vps-domain.txt ]; then
+        temp_dom=$(cat /etc/vps-domain.txt 2>/dev/null)
+        [ -n "$temp_dom" ] && IP=$(getent ahosts "$temp_dom" 2>/dev/null | awk '{print $1}' | head -n1)
     fi
+fi
+[ -z "$IP" ] && IP="127.0.0.1"
+
+# Deteksi ISP & Kota (Anti-Bogon & Anti-JSON Error)
+if [[ "$IP" =~ ^(127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.) || "$IP" == "127.0.0.1" ]]; then
+    ISP="PremDigital Cloud"
+    CITY="Singapore"
+else
+    ISP=$(curl -s -m 3 "https://ipinfo.io/${IP}/org" 2>/dev/null | sed -e 's/^AS[0-9]* //' | tr -d '"')
+    if [[ -z "$ISP" || "$ISP" =~ "{" || "$ISP" =~ "error" || "$ISP" =~ "Rate limit" || "$ISP" =~ "bogon" || "$ISP" =~ "status" ]]; then
+        ISP=$(curl -s -m 3 "http://ip-api.com/line/${IP}?fields=isp" 2>/dev/null)
+    fi
+    if [[ -z "$ISP" || "$ISP" =~ "{" || "$ISP" =~ "error" || "$ISP" =~ "429" || "$ISP" =~ "Rate limit" || "$ISP" =~ "bogon" || "$ISP" =~ "status" ]]; then
+        ISP="PremDigital Cloud"
+    fi
+
+    CITY=$(curl -s -m 3 "https://ipinfo.io/${IP}/city" 2>/dev/null | tr -d '"')
+    if [[ -z "$CITY" || "$CITY" =~ "{" || "$CITY" =~ "error" || "$CITY" =~ "Rate limit" || "$CITY" =~ "bogon" || "$CITY" =~ "status" ]]; then
+        CITY=$(curl -s -m 3 "http://ip-api.com/line/${IP}?fields=city" 2>/dev/null)
+    fi
+    if [[ -z "$CITY" || "$CITY" =~ "{" || "$CITY" =~ "error" || "$CITY" =~ "429" || "$CITY" =~ "Rate limit" || "$CITY" =~ "bogon" || "$CITY" =~ "status" ]]; then
+        CITY="Singapore"
+    fi
+fi
+
 while true; do
-    IP=$(cat /tmp/.cached_ip 2>/dev/null)
-    ISP=$(cat /tmp/.cached_isp 2>/dev/null || echo "PremDigital Cloud")
-    CITY=$(cat /tmp/.cached_city 2>/dev/null || echo "Singapore")
+    
     if [ -f /etc/vps-domain.txt ]; then
         DOMAIN=$(cat /etc/vps-domain.txt)
     else
@@ -1119,23 +1141,7 @@ while true; do
                 continue
             fi
             read -p "Password: " pass
-    # Cache IP, ISP, City
-    if [ ! -f /tmp/.cached_ip ]; then
-        IP_TMP=$(curl -s -m 2 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
-        ISP_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/org" 2>/dev/null | sed -e "s/^AS[0-9]* //" | tr -d "\"" || echo "PremDigital Cloud")
-        CITY_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/city" 2>/dev/null | tr -d "\"" || echo "Singapore")
-        echo "$IP_TMP" > /tmp/.cached_ip
-        echo "$ISP_TMP" > /tmp/.cached_isp
-        echo "$CITY_TMP" > /tmp/.cached_city
-    fi
             while true; do
-    IP=$(cat /tmp/.cached_ip 2>/dev/null)
-    ISP=$(cat /tmp/.cached_isp 2>/dev/null || echo "PremDigital Cloud")
-    CITY=$(cat /tmp/.cached_city 2>/dev/null || echo "Singapore")
-
-
-
-
                 read -p "Berapa Hari (Default 30): " masaaktif
                 [ -z "$masaaktif" ] && masaaktif=30
                 if [[ "$masaaktif" =~ ^[0-9]+$ ]] && [ "$masaaktif" -gt 0 ]; then
@@ -1613,23 +1619,7 @@ R="\e[31m"
 G="\e[32m"
 NC="\e[0m"
 
-    # Cache IP, ISP, City
-    if [ ! -f /tmp/.cached_ip ]; then
-        IP_TMP=$(curl -s -m 2 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
-        ISP_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/org" 2>/dev/null | sed -e "s/^AS[0-9]* //" | tr -d "\"" || echo "PremDigital Cloud")
-        CITY_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/city" 2>/dev/null | tr -d "\"" || echo "Singapore")
-        echo "$IP_TMP" > /tmp/.cached_ip
-        echo "$ISP_TMP" > /tmp/.cached_isp
-        echo "$CITY_TMP" > /tmp/.cached_city
-    fi
 while true; do
-    IP=$(cat /tmp/.cached_ip 2>/dev/null)
-    ISP=$(cat /tmp/.cached_isp 2>/dev/null || echo "PremDigital Cloud")
-    CITY=$(cat /tmp/.cached_city 2>/dev/null || echo "Singapore")
-
-
-
-
     clear
     echo -e "${C}======================================${NC}"
     echo -e "${Y}       MENU SERVICE (API & BOT)       ${NC}"
@@ -1723,23 +1713,7 @@ EOT
   curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
 }
 
-    # Cache IP, ISP, City
-    if [ ! -f /tmp/.cached_ip ]; then
-        IP_TMP=$(curl -s -m 2 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
-        ISP_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/org" 2>/dev/null | sed -e "s/^AS[0-9]* //" | tr -d "\"" || echo "PremDigital Cloud")
-        CITY_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/city" 2>/dev/null | tr -d "\"" || echo "Singapore")
-        echo "$IP_TMP" > /tmp/.cached_ip
-        echo "$ISP_TMP" > /tmp/.cached_isp
-        echo "$CITY_TMP" > /tmp/.cached_city
-    fi
 while true; do
-    IP=$(cat /tmp/.cached_ip 2>/dev/null)
-    ISP=$(cat /tmp/.cached_isp 2>/dev/null || echo "PremDigital Cloud")
-    CITY=$(cat /tmp/.cached_city 2>/dev/null || echo "Singapore")
-
-
-
-
   RESPONSE=$(fetch_commands)
   if echo "$RESPONSE" | grep -q '"document"'; then
     echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do
@@ -1870,7 +1844,7 @@ do_backup() {
     echo -e "${Y}Mengumpulkan data konfigurasi, akun & database...${NC}"
     
     local IP
-    
+    IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     local IP_CLEAN
     IP_CLEAN=$(echo "$IP" | tr '.' '-')
     local NOW
@@ -2342,23 +2316,7 @@ if [[ "$1" == "--cron" ]]; then
     exit 0
 fi
 
-    # Cache IP, ISP, City
-    if [ ! -f /tmp/.cached_ip ]; then
-        IP_TMP=$(curl -s -m 2 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
-        ISP_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/org" 2>/dev/null | sed -e "s/^AS[0-9]* //" | tr -d "\"" || echo "PremDigital Cloud")
-        CITY_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/city" 2>/dev/null | tr -d "\"" || echo "Singapore")
-        echo "$IP_TMP" > /tmp/.cached_ip
-        echo "$ISP_TMP" > /tmp/.cached_isp
-        echo "$CITY_TMP" > /tmp/.cached_city
-    fi
 while true; do
-    IP=$(cat /tmp/.cached_ip 2>/dev/null)
-    ISP=$(cat /tmp/.cached_isp 2>/dev/null || echo "PremDigital Cloud")
-    CITY=$(cat /tmp/.cached_city 2>/dev/null || echo "Singapore")
-
-
-
-
     clear
     echo -e "${C}======================================${NC}"
     echo -e "${Y}      BACKUP & RESTORE DATA VPS       ${NC}"
@@ -2621,23 +2579,7 @@ EOT
   curl -s -X PATCH "$UPDATE_URL" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null
 }
 
-    # Cache IP, ISP, City
-    if [ ! -f /tmp/.cached_ip ]; then
-        IP_TMP=$(curl -s -m 2 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
-        ISP_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/org" 2>/dev/null | sed -e "s/^AS[0-9]* //" | tr -d "\"" || echo "PremDigital Cloud")
-        CITY_TMP=$(curl -s -m 2 "https://ipinfo.io/${IP_TMP}/city" 2>/dev/null | tr -d "\"" || echo "Singapore")
-        echo "$IP_TMP" > /tmp/.cached_ip
-        echo "$ISP_TMP" > /tmp/.cached_isp
-        echo "$CITY_TMP" > /tmp/.cached_city
-    fi
 while true; do
-    IP=$(cat /tmp/.cached_ip 2>/dev/null)
-    ISP=$(cat /tmp/.cached_isp 2>/dev/null || echo "PremDigital Cloud")
-    CITY=$(cat /tmp/.cached_city 2>/dev/null || echo "Singapore")
-
-
-
-
   RESPONSE=$(fetch_commands)
   if echo "$RESPONSE" | grep -q '"document"'; then
     echo "$RESPONSE" | jq -c '.[].document' | while read -r DOC_DATA; do

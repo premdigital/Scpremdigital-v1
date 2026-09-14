@@ -1,1 +1,0 @@
-sed -i '/while true; do/a \    IP=$(cat \/tmp\/.cached_ip 2>\/dev\/null)\n    if [ -z "$IP" ]; then\n        IP=$(curl -s -m 2 ipv4.icanhazip.com 2>\/dev\/null || echo "127.0.0.1")\n        echo "$IP" > \/tmp\/.cached_ip\n    fi' install.sh
