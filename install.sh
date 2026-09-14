@@ -414,9 +414,9 @@ cat > /etc/issue.net << 'END'
 END
 cp -f /etc/issue.net /etc/issue 2>/dev/null || true
 cat > /etc/motd << 'END_MOTD'
-✧===============► ◈◈ ◄===============✧
+========================================
         ★ PREMDIGITAL TUNNELING ★        
-✧===============► ◈◈ ◄===============✧
+========================================
 Silahkan Ketik { menu }
 END_MOTD
 
