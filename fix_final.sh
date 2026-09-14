@@ -1,0 +1,1 @@
+sed -i '/    if \[ -z "$IP" \]; then/,/    fi/c \    IP=$(cat \/tmp\/.cached_ip 2>\/dev\/null)\n    ISP=$(cat \/tmp\/.cached_isp 2>\/dev\/null || echo "PremDigital Cloud")\n    CITY=$(cat \/tmp\/.cached_city 2>\/dev\/null || echo "Singapore")' install.sh
