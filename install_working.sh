@@ -42,6 +42,28 @@ if [[ "$1" == "--update-menu" ]]; then
             if [ -n "$existing_token" ] && [ "$existing_token" != "ISI_TOKEN_BOT_DISINI" ]; then
                 sed -i "s/BOT_TOKEN = \".*\"/BOT_TOKEN = \"$existing_token\"/g" /usr/local/bin/vps-bot
             fi
+
+# ==========================================
+# CEK LISENSI IP (GITHUB)
+# ==========================================
+MYIP=$(curl -sS -m 3 ipv4.icanhazip.com || curl -sS -m 3 ifconfig.me)
+IZIN_DATA=$(curl -sS -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+if [ -z "$IZIN_DATA" ]; then
+    echo -e "\e[31mAkses Ditolak! IP VPS ($MYIP) tidak terdaftar.\e[0m"
+    echo -e "\e[33mSilakan hubungi admin untuk mendaftarkan IP Anda.\e[0m"
+    exit 1
+fi
+EXP_DATE=$(echo "$IZIN_DATA" | awk '{print $3}')
+d1=$(date -d "$EXP_DATE" +%s 2>/dev/null)
+d2=$(date -d "today" +%s 2>/dev/null)
+if [ -n "$d1" ] && [ -n "$d2" ]; then
+    SISA_HARI=$(( (d1 - d2) / 86400 ))
+    if [ "$SISA_HARI" -lt 0 ]; then
+        echo -e "\e[31mScript Expired! Lisensi Anda sudah habis masa aktifnya.\e[0m"
+        exit 1
+    fi
+fi
+
             systemctl restart vps-bot 2>/dev/null || true
         fi
         rm -f /tmp/vps-bot.py
@@ -192,27 +214,6 @@ EOF
     echo -e "\e[32mMenu, Modul Xray, Banner, Stunnel SSL, Ookla Speedtest & Uptime berhasil diperbarui! Silakan ketik perintah: menu\e[0m"
     exit 0
 fi
-# ==========================================
-# CEK LISENSI IP (GITHUB)
-# ==========================================
-MYIP=$(curl -s -m 3 ipv4.icanhazip.com || curl -s -m 3 ifconfig.me)
-IZIN_DATA=$(curl -s -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
-if [ -z "$IZIN_DATA" ]; then
-    echo -e "\e[31mAkses Ditolak! IP VPS ($MYIP) tidak terdaftar.\e[0m"
-    echo -e "\e[33mSilakan hubungi admin untuk mendaftarkan IP Anda.\e[0m"
-    exit 1
-fi
-EXP_DATE=$(echo "$IZIN_DATA" | awk '{print $3}')
-d1=$(date -d "$EXP_DATE" +%s 2>/dev/null)
-d2=$(date -d "today" +%s 2>/dev/null)
-if [ -n "$d1" ] && [ -n "$d2" ]; then
-    SISA_HARI=$(( (d1 - d2) / 86400 ))
-    if [ "$SISA_HARI" -lt 0 ]; then
-        echo -e "\e[31mScript Expired! Lisensi Anda sudah habis masa aktifnya.\e[0m"
-        exit 1
-    fi
-fi
-
 
 # ==========================================
 # PREMDIGITAL - SSH & VPN AUTO INSTALLER V1
@@ -322,7 +323,7 @@ mkdir -p /etc/premdigital/
 mkdir -p /usr/local/bin/
 touch /etc/premdigital/users.db
 
-MYIP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+MYIP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
 if [ ! -f /etc/vps-domain.txt ]; then
     echo "$MYIP" > /etc/vps-domain.txt
 fi
@@ -866,8 +867,8 @@ NC="\e[0m"
 # ==========================================
 # CEK LISENSI IP (GITHUB)
 # ==========================================
-MYIP=$(curl -s -m 3 ipv4.icanhazip.com || curl -s -m 3 ifconfig.me)
-IZIN_DATA=$(curl -s -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
+MYIP=$(curl -sS -m 3 ipv4.icanhazip.com || curl -sS -m 3 ifconfig.me)
+IZIN_DATA=$(curl -sS -m 3 https://raw.githubusercontent.com/premdigital/Scpremdigital-v1/main/ijin.txt | grep "^$MYIP" 2>/dev/null)
 if [ -z "$IZIN_DATA" ]; then
     echo -e "${R}Akses Ditolak! IP VPS ($MYIP) tidak terdaftar.${NC}"
     exit 1
@@ -1050,7 +1051,7 @@ get_uptime_info() {
 }
 
 while true; do
-    IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     
     # Deteksi ISP Akurat (ipinfo.io -> ip-api -> ifconfig.co)
     ISP=$(curl -s -m 3 "https://ipinfo.io/${IP}/org" 2>/dev/null | sed -e 's/^AS[0-9]* //' | tr -d '"')
@@ -1830,7 +1831,7 @@ do_backup() {
     echo -e "${Y}Mengumpulkan data konfigurasi, akun & database...${NC}"
     
     local IP
-    IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     local IP_CLEAN
     IP_CLEAN=$(echo "$IP" | tr '.' '-')
     local NOW
@@ -2135,7 +2136,7 @@ do_send_telegram() {
     if [ -z "$latest_file" ] || [ ! -f "$latest_file" ]; then
         echo -e "${Y}Belum ada file backup, membuat backup baru sekarang...${NC}"
         local IP
-        IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
+        IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
         local IP_CLEAN
         IP_CLEAN=$(echo "$IP" | tr '.' '-')
         local NOW
@@ -2270,7 +2271,7 @@ if [[ "$(basename "$0")" == "restore-vps" ]] || [[ "$1" == "--restore" ]]; then
 fi
 
 if [[ "$1" == "--cron" ]]; then
-    IP=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
+    IP=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || echo "127.0.0.1")
     IP_CLEAN=$(echo "$IP" | tr '.' '-')
     NOW=$(date +'%Y-%m-%d-%H%M%S')
     TEMP="/root/backup/tmp_bck_cron_$$"
@@ -2617,4 +2618,4 @@ SVC_EOF
     echo -e "\e[32m[SUKSES] Auto-Creator Daemon berjalan!\e[0m"
 fi
 # FIX: restore original file structure and cleanly inject auto-creator
-# Ready for Github Commit - Bug fixed (kill ppid)
+# Ready for Github Commit - Bug fixed (exit 0)
