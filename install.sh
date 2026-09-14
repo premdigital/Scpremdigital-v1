@@ -456,7 +456,8 @@ cat > /usr/local/bin/ws-proxy << 'END'
 import socket, threading, select, sys, time
 
 BUFFER_SIZE = 65536
-RESPONSE_101 = b"HTTP/1.1 200 OK\r\n\r\n"
+RESPONSE_101 = b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n"
+RESPONSE_200 = b"HTTP/1.1 200 Connection Established\r\n\r\n"
 
 def set_optimized_sock(s):
     try:
@@ -515,8 +516,11 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
                 if not ssh_banner:
                     return
                 
-                # Kirim respons 101 disusul banner SSH Dropbear ke HTTP Custom
-                client_sock.sendall(RESPONSE_101)
+                # Kirim respons handshake disusul banner SSH Dropbear ke HTTP Custom
+                if data.startswith(b'CONNECT') or b'CONNECT ' in data:
+                    client_sock.sendall(RESPONSE_200)
+                else:
+                    client_sock.sendall(RESPONSE_101)
                 client_sock.sendall(ssh_banner)
                 first_client_packet = True
         # 3. Direct SSH Protocol biasa (SSH-2.0...)
