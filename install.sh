@@ -514,6 +514,7 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
                 else:
                     client_sock.sendall(RESPONSE_101)
                 
+                time.sleep(0.15)
                 target_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 set_optimized_sock(target_sock)
                 target_sock.connect((target_host, target_port))
