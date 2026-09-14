@@ -1062,6 +1062,14 @@ while true; do
     IP=$(cat /tmp/.cached_ip 2>/dev/null)
     ISP=$(cat /tmp/.cached_isp 2>/dev/null || echo "PremDigital Cloud")
     CITY=$(cat /tmp/.cached_city 2>/dev/null || echo "Singapore")
+
+
+
+
+    
+    
+    fi
+    
     if [ -f /etc/vps-domain.txt ]; then
         DOMAIN=$(cat /etc/vps-domain.txt)
     else
