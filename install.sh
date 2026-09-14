@@ -125,7 +125,7 @@ socket = r:TCP_NODELAY=1
 foreground = yes
 
 [openssh-tls]
-accept = 0.0.0.0:8443
+accept = 127.0.0.1:777
 connect = 127.0.0.1:109
 END_STUNNEL_CONF
 
@@ -137,7 +137,7 @@ After=network.target dropbear.service
 [Service]
 Type=simple
 User=root
-ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp >/dev/null 2>&1 || true'
+ExecStartPre=-/bin/sh -c 'fuser -k 777/tcp >/dev/null 2>&1 || true'
 ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
 Restart=always
 RestartSec=3
@@ -149,7 +149,7 @@ WantedBy=multi-user.target
 EOF
 
     ln -sf /etc/systemd/system/stunnel4.service /etc/systemd/system/stunnel.service 2>/dev/null || true
-    fuser -k 8443/tcp >/dev/null 2>&1 || true
+    fuser -k 777/tcp >/dev/null 2>&1 || true
     pkill -9 stunnel4 2>/dev/null || true
     pkill -9 stunnel 2>/dev/null || true
     systemctl daemon-reload
@@ -485,8 +485,8 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
             target_sock.connect(('127.0.0.1', tls_target_port))
             target_sock.sendall(data)
             first_client_packet = False
-        # 2. Deteksi Request HTTP / WebSocket Upgrade (HTTP Custom Payload atau Xray)
-        elif b'HTTP/' in data or b'Upgrade: websocket' in data or b'GET ' in data or b'POST ' in data or b'PATCH ' in data or b'HEAD ' in data:
+        # 2. Deteksi Request HTTP / WebSocket Upgrade / Injeksi Payload (Enhanced, Direct, Multi-Split)
+        elif b'HTTP/' in data or b'Upgrade' in data or b'GET ' in data or b'POST ' in data or b'MOVE ' in data or b'PATCH ' in data or b'HEAD ' in data or b'CONNECT ' in data:
             xray_port = None
             if b'/vmess' in data:
                 xray_port = 10001
@@ -508,7 +508,7 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
                 target_sock.sendall(data)
                 first_client_packet = False
             else:
-                # Kirim respons handshake terlebih dahulu agar HTTP Custom membaca 101 bersih
+                # Kirim respons handshake terlebih dahulu agar HTTP Custom membaca 101/200 bersih
                 if data.startswith(b'CONNECT') or b'CONNECT ' in data:
                     client_sock.sendall(RESPONSE_200)
                 else:
@@ -531,6 +531,7 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
         target_sock.settimeout(None)
 
         sockets = [client_sock, target_sock]
+        ssh_started = False if first_client_packet else True
         while True:
             r, _, x = select.select(sockets, [], sockets, 300)
             if x or not r:
@@ -540,16 +541,18 @@ def handle_client(client_sock, target_host, target_port, tls_target_port=None):
                     buf = client_sock.recv(BUFFER_SIZE)
                     if not buf:
                         return
-                    # Filter dan bersihkan paket sisa injeksi [split]HTTP/ 200
-                    if first_client_packet:
-                        if buf.startswith(b"HTTP/") or b"HTTP/1." in buf:
-                            idx = buf.find(b"SSH-2.0")
-                            if idx != -1:
-                                buf = buf[idx:]
-                                target_sock.sendall(buf)
-                                first_client_packet = False
-                            continue
-                        first_client_packet = False
+                    # Filter dan buang seluruh paket sisa injeksi payload (MOVE, http/ 200, dsb.)
+                    if not ssh_started:
+                        idx = buf.find(b"SSH-")
+                        if idx != -1:
+                            ssh_started = True
+                            target_sock.sendall(buf[idx:])
+                        else:
+                            if b"CONNECT" in buf or b"connect" in buf:
+                                client_sock.sendall(RESPONSE_200)
+                            else:
+                                client_sock.sendall(RESPONSE_101)
+                        continue
                     target_sock.sendall(buf)
                 else:
                     buf = target_sock.recv(BUFFER_SIZE)
@@ -596,7 +599,9 @@ def start_listener(listen_host, listen_port, target_host, target_port, tls_targe
 if __name__ == '__main__':
     ports = [
         ('0.0.0.0', 443, '127.0.0.1', 109, 4430),
+        ('0.0.0.0', 8443, '127.0.0.1', 109, 777),
         ('0.0.0.0', 80, '127.0.0.1', 109, None),
+        ('0.0.0.0', 8080, '127.0.0.1', 109, None),
         ('127.0.0.1', 700, '127.0.0.1', 109, None),
         ('0.0.0.0', 8880, '127.0.0.1', 109, None),
         ('0.0.0.0', 2082, '127.0.0.1', 109, None),
@@ -666,7 +671,7 @@ socket = r:TCP_NODELAY=1
 foreground = yes
 
 [openssh-tls]
-accept = 0.0.0.0:8443
+accept = 127.0.0.1:777
 connect = 127.0.0.1:109
 END
 
@@ -678,7 +683,7 @@ After=network.target dropbear.service
 [Service]
 Type=simple
 User=root
-ExecStartPre=-/bin/sh -c 'fuser -k 8443/tcp >/dev/null 2>&1 || true'
+ExecStartPre=-/bin/sh -c 'fuser -k 777/tcp >/dev/null 2>&1 || true'
 ExecStart=$STUNNEL_BIN /etc/stunnel/stunnel.conf
 Restart=always
 RestartSec=3
@@ -690,7 +695,7 @@ WantedBy=multi-user.target
 EOF
 
 ln -sf /etc/systemd/system/stunnel4.service /etc/systemd/system/stunnel.service 2>/dev/null || true
-fuser -k 8443/tcp >/dev/null 2>&1 || true
+fuser -k 777/tcp >/dev/null 2>&1 || true
 pkill -9 stunnel4 2>/dev/null || true
 pkill -9 stunnel 2>/dev/null || true
 systemctl daemon-reload
@@ -742,7 +747,7 @@ systemctl daemon-reload
 systemctl enable badvpn-7300 badvpn-7100 2>/dev/null || true
 systemctl restart badvpn-7300 badvpn-7100 2>/dev/null || true
 
-# 9. Setting Squid Proxy (Port 8080)
+# 9. Setting Squid Proxy (Port 3128)
 echo -e "\e[33m[INFO] Setting Squid...\e[0m"
 cat > /etc/squid/squid.conf <<-END
 acl localhost src 127.0.0.1/32
@@ -753,7 +758,7 @@ acl all src all
 http_access allow localhost
 http_access allow localnet
 http_access allow all
-http_port 8080
+http_port 3128
 END
 systemctl restart squid
 
@@ -1321,7 +1326,8 @@ while true; do
             echo -e " • Port 109 (Dropbear)       : $(check_port 109)"
             echo -e " • Port 22 (OpenSSH)         : $(check_port 22)"
             echo -e " • Port 7100 (BadVPN UDPGW)  : $(check_port 7100)"
-            echo -e " • Port 8080 (Squid Proxy)   : $(check_port 8080)"
+            echo -e " • Port 8080 (WS Multiplexer) : $(check_port 8080)"
+            echo -e " • Port 3128 (Squid Proxy)    : $(check_port 3128)"
             echo -e "${C}======================================${NC}"
             echo ""
             read -r -p "Tekan [Enter] untuk kembali ke menu..." dummy
