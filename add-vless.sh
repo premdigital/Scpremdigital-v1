@@ -21,7 +21,7 @@ mkdir -p /etc/premdigital
 # Ambil Domain dari file, jika tidak ada pakai IP
 domain=$(cat /etc/vps-domain.txt 2>/dev/null | tr -d '\r\n')
 if [[ -z "$domain" ]]; then
-    domain=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    domain=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
 fi
 
 clear

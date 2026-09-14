@@ -17,7 +17,7 @@ chmod 644 /var/log/xray/*.log 2>/dev/null
 if [ -f /etc/vps-domain.txt ]; then
     domain=$(cat /etc/vps-domain.txt | tr -d '\r\n')
 else
-    domain=$(curl -sS -m 3 ipv4.icanhazip.com 2>/dev/null || curl -sS -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
+    domain=$(curl -s -m 3 ipv4.icanhazip.com 2>/dev/null || curl -s -m 3 ipinfo.io/ip 2>/dev/null || echo "127.0.0.1")
     echo "$domain" > /etc/vps-domain.txt
 fi
 
@@ -65,7 +65,7 @@ if ! /usr/local/bin/xray version >/dev/null 2>&1; then
     
     rm -f /tmp/xray.zip
     wget -qO /tmp/xray.zip "https://github.com/XTLS/Xray-core/releases/download/v1.8.24/Xray-linux-${xray_arch}.zip" || \
-    curl -sSL "https://github.com/XTLS/Xray-core/releases/download/v1.8.24/Xray-linux-${xray_arch}.zip" -o /tmp/xray.zip
+    curl -sL "https://github.com/XTLS/Xray-core/releases/download/v1.8.24/Xray-linux-${xray_arch}.zip" -o /tmp/xray.zip
     
     if [ -s /tmp/xray.zip ]; then
         mkdir -p /tmp/xray_extract
@@ -80,7 +80,7 @@ if ! /usr/local/bin/xray version >/dev/null 2>&1; then
     # Fallback ke installer resmi jika masih belum terpasang
     if ! /usr/local/bin/xray version >/dev/null 2>&1; then
         echo -e "\e[33m[INFO] Menggunakan fallback installer resmi XTLS...\e[0m"
-        bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install >/dev/null 2>&1
+        bash -c "$(curl -sL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install >/dev/null 2>&1
     fi
 fi
 
