@@ -1081,9 +1081,9 @@ while true; do
     UPTIME_INFO=$(get_uptime_info)
 
     clear
-    echo -e "${C}✧===============${Y}► ◈◈ ◄${C}===============✧${NC}"
+    echo -e "${C}========================================${NC}"
     echo -e "          ${Y}PREMDIGITAL TUNNEL${NC}"
-    echo -e "${C}✧===============${Y}► ◈◈ ◄${C}===============✧${NC}"
+    echo -e "${C}========================================${NC}"
     echo -e " OS         : $(cat /etc/os-release | grep -w PRETTY_NAME | cut -d= -f2 | tr -d '"')"
     echo -e " RAM        : $(free -m | awk 'NR==2{printf "%sMB / %sMB", $3,$2}')"
     echo -e " SWAP       : $SWAP_INFO"
@@ -1517,9 +1517,9 @@ Web: https://www.premdigital.web.id
 BANNEREOF
                     cp -f /etc/issue.net /etc/issue 2>/dev/null || true
                     cat > /etc/motd << 'END_MOTD'
-✧===============► ◈◈ ◄===============✧
+========================================
         ★ PREMDIGITAL TUNNELING ★        
-✧===============► ◈◈ ◄===============✧
+========================================
 Silahkan Ketik { menu }
 END_MOTD
                     systemctl restart dropbear 2>/dev/null
